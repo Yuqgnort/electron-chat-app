@@ -1,0 +1,28 @@
+{
+  "name": "electron-chat-app",
+  "version": "1.0.0",
+  "description": "Electron Chat Application with Backend and Frontend",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:be\" \"npm run dev:fe\"",
+    "dev:be": "cd BE && npm run dev",
+    "dev:fe": "cd FE && npm start",
+    "build": "concurrently \"npm run build:be\" \"npm run build:fe\"",
+    "build:be": "cd BE && npm run build",
+    "build:fe": "cd FE && npm run make",
+    "install:all": "npm install && cd BE && npm install && cd ../FE && pnpm install",
+    "start": "concurrently \"npm run start:be\" \"npm run start:fe\"",
+    "start:be": "cd BE && npm start",
+    "start:fe": "cd FE && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "electron",
+    "chat",
+    "socket.io",
+    "typescript"
+  ],
+  "author": "lap60786",
+  "license": "MIT"
+}

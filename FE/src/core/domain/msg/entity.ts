@@ -13,6 +13,7 @@ export interface IMsgEntity {
   content: string;
   createdAt: Date;
   status: EMsgStatus;
+  receiverId: string;
   conversationId: string;
 }
 

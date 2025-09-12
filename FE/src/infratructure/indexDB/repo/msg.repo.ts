@@ -11,12 +11,11 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
       return await db.messages.get(id);
     },
     async update(msg) {
-      const updated = await db.messages.put(msg);
-      return await db.messages.get(updated);
+      await db.messages.update(msg.id, msg);
+      return await db.messages.get(msg.id);
     },
     async findById(id) {
-      const msg = await db.messages.get(id);
-      return msg ?? null;
+      return await db.messages.get(id);
     },
     async findByConversationId(conversationId) {
       return db.messages

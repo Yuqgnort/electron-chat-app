@@ -3,10 +3,10 @@ import { createAppService } from "./core/application/services-facade";
 import { IUserEntity } from "./core/domain/user/entity";
 import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
 import { ChatDb, initDb } from "./infratructure/indexDB/init";
-import { createConvRepoIdb } from "./infratructure/indexDB/repo/conv";
-import { createConvPartRepoIdb } from "./infratructure/indexDB/repo/conv-part";
-import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg";
-import { createUserRepoIdb } from "./infratructure/indexDB/repo/user";
+import { createConvRepoIdb } from "./infratructure/indexDB/repo/conv.repo";
+import { createConvPartRepoIdb } from "./infratructure/indexDB/repo/conv-part.repo";
+import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
+import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
 import { createSocketClient } from "./infratructure/socket";
 
 /////////////////////////

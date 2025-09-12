@@ -4,9 +4,16 @@ import { TMsgEvents } from "../domain/msg/events";
 
 export type TDomainEvent = TConvEvents | TMsgEvents | TConvPartEvents;
 
+type EventMap = {
+  [E in TDomainEvent as E["type"]]: E;
+};
+
 export interface IEventBus {
-  publish(event: TDomainEvent): void;
-  subscribe(type: string, handler: (event: TDomainEvent) => void): void;
+  publish<E extends TDomainEvent>(event: E): void;
+  subscribe<K extends keyof EventMap>(
+    type: K,
+    handler: (event: EventMap[K]) => void
+  ): void;
 }
 
 export function createInMemoryEventBus(): IEventBus {

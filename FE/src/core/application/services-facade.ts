@@ -60,11 +60,7 @@ export function createAppService(
     },
     msg: {
       sendMessage: (payload: Parameters<typeof createMsg>[3]) =>
-        createMsg(repos.msgRepo, eventBus, communicationManager, {
-          content: payload.content,
-          senderId: payload.senderId,
-          conversationId: payload.conversationId,
-        }),
+        createMsg(repos.msgRepo, eventBus, communicationManager, payload),
     },
     user: {
       getAllUsers: () => getAllUsers(repos.userRepo),

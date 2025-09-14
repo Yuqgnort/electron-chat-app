@@ -1,5 +1,4 @@
 import { createInMemoryEventBus } from "./core/application/eventbus";
-import { createAppService } from "./core/application/services-facade";
 import { IUserEntity } from "./core/domain/user/entity";
 import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
 import { ChatDb, initDb } from "./infratructure/indexDB/init";
@@ -8,6 +7,7 @@ import { createConvPartRepoIdb } from "./infratructure/indexDB/repo/conv-part.re
 import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
 import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
 import { createSocketClient } from "./infratructure/socket";
+import { createAppService } from "./core/application/services-facade";
 
 /////////////////////////
 

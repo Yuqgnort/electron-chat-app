@@ -1,14 +1,23 @@
 import { IConvPartRepo } from "../domain/conv-part/repo";
 import { IConvRepo } from "../domain/conv/repo";
-import { IMsgEntity } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
+import { TIntegrationSentEvent } from "./event";
 import { IEventBus } from "./eventbus";
 import { createConvPart } from "./usecase/conv-part.uc";
 import { createConv } from "./usecase/conv.uc";
 import { createMsg } from "./usecase/msg.uc";
 import { getAllUsers, getUserById } from "./usecase/user.uc";
+
+type ExtractPayload<
+  T extends { type: string },
+  U extends T["type"],
+> = T extends { type: U; payload: infer P } ? P : never;
+
+type MapEvent<U extends TIntegrationSentEvent["type"]> = (
+  payload: ExtractPayload<TIntegrationSentEvent, U>
+) => Promise<void>;
 
 export type TTransactionTable =
   | "conversations"
@@ -24,7 +33,7 @@ export interface ITransactionManager {
 }
 
 export interface ICommunicationManager {
-  sendMessage(message: IMsgEntity): Promise<void>;
+  sendMessage: MapEvent<"msg:send">;
 }
 
 export function createAppService(

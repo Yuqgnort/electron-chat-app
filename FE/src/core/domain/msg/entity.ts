@@ -1,7 +1,7 @@
 export enum EMsgStatus {
   SENT = "sent",
   READ = "read",
-  PENDING = "Pending",
+  PENDING = "pending",
   DELIVERED = "delivered",
 }
 

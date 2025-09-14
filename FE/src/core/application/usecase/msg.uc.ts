@@ -39,7 +39,13 @@ export async function createMsg(
     type: "MsgCreated",
     payload: newMsg,
   });
-  await communicationManager.sendMessage(newMsg);
+  await communicationManager.sendMessage({
+    content: newMsg.content,
+    conversationId: newMsg.conversationId,
+    localId: newMsg.localId,
+    senderId: newMsg.senderId,
+    createdAt: newMsg.createdAt,
+  });
   return newMsg;
 }
 

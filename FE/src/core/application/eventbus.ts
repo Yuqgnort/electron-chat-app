@@ -1,23 +1,34 @@
 import { TConvPartEvents } from "../domain/conv-part/events";
 import { TConvEvents } from "../domain/conv/events";
 import { TMsgEvents } from "../domain/msg/events";
+import { TIntegrationReceivedEvent } from "./event";
 
-export type TDomainEvent = TConvEvents | TMsgEvents | TConvPartEvents;
+///////////////////////
 
-type EventMap = {
-  [E in TDomainEvent as E["type"]]: E;
+export type TEvent =
+  | TConvEvents
+  | TMsgEvents
+  | TConvPartEvents
+  | TIntegrationReceivedEvent;
+
+type TEventMap = {
+  [E in TEvent as E["type"]]: E;
 };
 
+///////////////////////
+
 export interface IEventBus {
-  publish<E extends TDomainEvent>(event: E): void;
-  subscribe<K extends keyof EventMap>(
+  publish<E extends TEvent>(event: E): void;
+  subscribe<K extends keyof TEventMap>(
     type: K,
-    handler: (event: EventMap[K]) => void
+    handler: (event: TEventMap[K]) => void
   ): void;
 }
 
+///////////////////////
+
 export function createInMemoryEventBus(): IEventBus {
-  const handlers: { [type: string]: ((e: TDomainEvent) => void)[] } = {};
+  const handlers: { [type: string]: ((e: TEvent) => void)[] } = {};
 
   return {
     publish(event) {

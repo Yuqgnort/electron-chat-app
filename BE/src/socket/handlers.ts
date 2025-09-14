@@ -18,7 +18,7 @@ export function setupSocketHandlers(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log("🔌 Connected:", socket.id);
     socket.on(ChatEvent.REGISTER, handleRegister(socket, io));
-    socket.on(ChatEvent.MESSAGE_NEW, handleMessageNew(socket, io));
+    socket.on(ChatEvent.MESSAGE_SEND, handleMessageSend(socket, io));
     socket.on(ChatEvent.MESSAGE_DELIVERED, handleMessageDelivered(io));
     socket.on(ChatEvent.MESSAGE_READ, handleMessageRead(io));
     socket.on("disconnect", handleDisconnect(socket));
@@ -36,26 +36,29 @@ function handleRegister(socket: Socket, io: Server) {
     const pending = getPendingMessages(userId);
     if (pending.length > 0) {
       pending.forEach((msg) => {
-        io.to(socket.id).emit(ChatEvent.MESSAGE_FORWARD, msg);
+        io.to(socket.id).emit(ChatEvent.MESSAGE_INCOMING, msg);
       });
       clearPendingMessages(userId);
     }
   };
 }
 
-function handleMessageNew(socket: Socket, io: Server) {
+function handleMessageSend(socket: Socket, io: Server) {
   return ({
-    local_id,
-    toUser,
+    localId,
+    conversationId,
+    senderId,
+    receiverId,
     content,
-  }: EventPayloads[ChatEvent.MESSAGE_NEW]) => {
+    createdAt,
+  }: EventPayloads[ChatEvent.MESSAGE_SEND]) => {
     const serverId = uuidv4();
     const fromUser = (socket as any).userId;
 
     const msg: Message = {
       server_id: serverId,
       from: fromUser,
-      to: toUser,
+      to: receiverId,
       content,
       status: "sent",
       created_at: new Date().toISOString(),
@@ -63,35 +66,43 @@ function handleMessageNew(socket: Socket, io: Server) {
 
     // ACK to sender
     socket.emit(ChatEvent.MESSAGE_ACK, {
-      local_id,
-      server_id: serverId,
+      localId,
+      serverId,
       status: "sent",
     });
 
     // Forward to recipient
-    if (isUserOnline(toUser)) {
-      const socketIds = getUserSocketIds(toUser);
+    if (isUserOnline(receiverId)) {
+      const socketIds = getUserSocketIds(receiverId);
       socketIds.forEach((sid) => {
-        io.to(sid).emit(ChatEvent.MESSAGE_FORWARD, msg);
+        io.to(sid).emit(ChatEvent.MESSAGE_INCOMING, {
+          serverId,
+          from: fromUser,
+          content,
+        });
       });
     } else {
       // User offline → save to pending
-      addPendingMessage(toUser, msg);
+      addPendingMessage(receiverId, {
+        serverId,
+        from: fromUser,
+        content,
+      });
     }
   };
 }
 
 function handleMessageDelivered(io: Server) {
-  return ({ server_id }: EventPayloads[ChatEvent.MESSAGE_DELIVERED]) => {
-    const senderId = findSender(server_id);
-    notifySender(io, senderId, server_id, "delivered");
+  return ({ serverId }: EventPayloads[ChatEvent.MESSAGE_DELIVERED]) => {
+    const senderId = findSender(serverId);
+    notifySender(io, senderId, serverId, "delivered");
   };
 }
 
 function handleMessageRead(io: Server) {
-  return ({ server_id }: EventPayloads[ChatEvent.MESSAGE_READ]) => {
-    const senderId = findSender(server_id);
-    notifySender(io, senderId, server_id, "read");
+  return ({ serverId }: EventPayloads[ChatEvent.MESSAGE_READ]) => {
+    const senderId = findSender(serverId);
+    notifySender(io, senderId, serverId, "read");
   };
 }
 

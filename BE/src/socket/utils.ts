@@ -1,10 +1,10 @@
 import { Server } from "socket.io";
 import { userSockets, pendingMessages } from "./state";
 
-export function findSender(server_id: string): string {
+export function findSender(serverId: string): string {
   for (const user in pendingMessages) {
     for (const msg of pendingMessages[user]) {
-      if (msg.server_id === server_id) return msg.from;
+      if (msg.serverId === serverId) return msg.from;
     }
   }
   return "";
@@ -17,9 +17,10 @@ export function notifySender(
   status: "delivered" | "read"
 ) {
   (userSockets[senderId] || []).forEach((sid) => {
-    io.to(sid).emit("chat:message:status", {
-      server_id: serverId,
-      status,
-    });
+    if (status === "delivered") {
+      io.to(sid).emit("msg:delivered", { serverId });
+    } else {
+      io.to(sid).emit("msg:read", { serverId });
+    }
   });
 }

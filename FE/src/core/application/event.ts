@@ -26,13 +26,21 @@ export type TIntegrationReceivedEvent =
       payload: { serverId: string; from: string; content: string };
     };
 
-export type TIntegrationSentEvent = {
-  type: "msg:send";
-  payload: {
-    localId: string;
-    conversationId: string;
-    senderId: string;
-    content: string;
-    createdAt: Date;
-  };
-};
+export type TIntegrationSentEvent =
+  | {
+      type: "register";
+      payload: {
+        userId: string;
+      };
+    }
+  | {
+      type: "msg:send";
+      payload: {
+        localId: string;
+        conversationId: string;
+        senderId: string;
+        receiverId: string;
+        content: string;
+        createdAt: Date;
+      };
+    };

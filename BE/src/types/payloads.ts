@@ -5,34 +5,32 @@ export interface EventPayloads {
     userId: string;
   };
 
-  [ChatEvent.MESSAGE_NEW]: {
-    local_id: string;
-    toUser: string;
+  [ChatEvent.MESSAGE_SEND]: {
+    localId: string;
+    conversationId: string;
+    senderId: string;
+    receiverId: string;
     content: string;
+    createdAt: Date;
   };
 
   [ChatEvent.MESSAGE_ACK]: {
-    local_id: string;
-    server_id: string;
+    localId: string;
+    serverId: string;
     status: string;
   };
 
-  [ChatEvent.MESSAGE_FORWARD]: {
-    server_id: string;
+  [ChatEvent.MESSAGE_INCOMING]: {
+    serverId: string;
     from: string;
     content: string;
   };
 
   [ChatEvent.MESSAGE_DELIVERED]: {
-    server_id: string;
+    serverId: string;
   };
 
   [ChatEvent.MESSAGE_READ]: {
-    server_id: string;
-  };
-
-  [ChatEvent.MESSAGE_STATUS]: {
-    server_id: string;
-    status: "delivered" | "read";
+    serverId: string;
   };
 }

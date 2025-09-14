@@ -44,6 +44,7 @@ export async function createMsg(
     conversationId: newMsg.conversationId,
     localId: newMsg.localId,
     senderId: newMsg.senderId,
+    receiverId: newMsg.receiverId,
     createdAt: newMsg.createdAt,
   });
   return newMsg;

@@ -9,6 +9,7 @@ import { io, Socket } from "socket.io-client";
 export interface ISocketClient extends ICommunicationManager {
   connect(): void;
   disconnect(): void;
+  register(userId: string): void;
 }
 
 type TExtractPayload<T, U extends Event["type"]> = T extends {
@@ -64,6 +65,12 @@ export function createSocketClient(
       socket?.disconnect();
       socket = null;
     },
+    register(userId: string) {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("register", { userId });
+    },
     async sendMessage(msg): Promise<void> {
       if (!socket || !socket.connected) {
         throw new Error("Socket not connected");
@@ -72,6 +79,7 @@ export function createSocketClient(
         localId: msg.localId,
         conversationId: msg.conversationId,
         senderId: msg.senderId,
+        receiverId: msg.receiverId,
         content: msg.content,
         createdAt: msg.createdAt,
       });

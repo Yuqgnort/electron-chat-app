@@ -14,8 +14,13 @@ export const createConvRepoIdb = (db: ChatDb): IConvRepo => {
       const conv = await db.conversations.get(id);
       return conv ?? null;
     },
-    async getConvsByUserId(userId) {
-      return await db.conversations.where("id").equals(userId).toArray();
+    async getConvByUserIds(userIds) {
+      if (userIds.length !== 2) {
+        return null;
+      }
+      const key = [...userIds].sort().join(":");
+      const conv = await db.conversations.get({ key });
+      return conv ?? null;
     },
     async updateConv(conv) {
       const updated = await db.conversations.put(conv);

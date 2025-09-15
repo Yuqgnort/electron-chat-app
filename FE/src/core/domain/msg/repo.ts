@@ -8,4 +8,5 @@ export interface IMsgRepo {
   findByConversationId(
     conversationId: IConvEntity["id"]
   ): Promise<IMsgEntity[]>;
+  findAll(): Promise<IMsgEntity[]>;
 }

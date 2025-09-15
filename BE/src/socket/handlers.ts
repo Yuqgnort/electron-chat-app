@@ -16,7 +16,7 @@ import { findSender, notifySender } from "./utils";
 
 export function setupSocketHandlers(io: Server) {
   io.on("connection", (socket: Socket) => {
-    console.log("🔌 Connected:", socket.id);
+    console.log("Connected:", socket.id);
     socket.on(ChatEvent.REGISTER, handleRegister(socket, io));
     socket.on(ChatEvent.MESSAGE_SEND, handleMessageSend(socket, io));
     socket.on(ChatEvent.MESSAGE_DELIVERED, handleMessageDelivered(io));
@@ -29,9 +29,7 @@ function handleRegister(socket: Socket, io: Server) {
   return ({ userId }: EventPayloads[ChatEvent.REGISTER]) => {
     addUserSocket(userId, socket.id);
     (socket as any).userId = userId;
-
-    console.log(`✅ User ${userId} online`);
-
+    console.log(`User ${userId} online`);
     // Replay pending messages
     const pending = getPendingMessages(userId);
     if (pending.length > 0) {

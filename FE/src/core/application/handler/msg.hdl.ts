@@ -5,7 +5,10 @@ import { EMsgStatus } from "@/core/domain/msg/entity";
 import { setMsgDelivered, setMsgRead, setMsgSent } from "../usecase/msg.uc";
 import { IMsgRepo } from "@/core/domain/msg/repo";
 
-export const newMsgHandler = (eventBus: IEventBus, convRepo: IConvRepo) => {
+export const updateLastMsgHandler = (
+  eventBus: IEventBus,
+  convRepo: IConvRepo
+) => {
   eventBus.subscribe("MsgCreated", async ({ payload }) => {
     const conv = await convRepo.getConvById(payload.conversationId);
     await updateConvLastMessageId(convRepo, eventBus, conv, payload.id);

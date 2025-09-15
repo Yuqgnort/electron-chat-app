@@ -4,6 +4,7 @@ import { IMsgEntity } from "../msg/entity";
 
 export interface IConvEntity {
   id: string;
+  key?: string;
   title?: string;
   createdAt: Date;
   updatedAt: Date;

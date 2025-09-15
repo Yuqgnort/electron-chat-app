@@ -1,5 +1,5 @@
 import { createInMemoryEventBus } from "./core/application/eventbus";
-import { IUserEntity } from "./core/domain/user/entity";
+import { EUserGender, IUserEntity } from "./core/domain/user/entity";
 import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
 import { ChatDb, initDb } from "./infratructure/indexDB/init";
 import { createConvRepoIdb } from "./infratructure/indexDB/repo/conv.repo";
@@ -8,10 +8,42 @@ import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
 import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
 import { createSocketClient } from "./infratructure/socket";
 import { createAppService } from "./core/application/services-facade";
+import { updateLastMsgHandler } from "./core/application/handler/msg.hdl";
 
 /////////////////////////
 
-const seedUsers: IUserEntity[] = [];
+const seedUsers: IUserEntity[] = [
+  {
+    id: crypto.randomUUID(),
+    userName: "Alice",
+    displayName: "Alice",
+    bio: "Hello, I'm Alice!",
+    createdAt: new Date().toISOString(),
+    dob: "01/01/1990",
+    gender: EUserGender.FEMALE,
+    name: "Alice Johnson",
+  },
+  {
+    id: crypto.randomUUID(),
+    userName: "Bob",
+    displayName: "Bob",
+    bio: "Hey there, I'm Bob.",
+    createdAt: new Date().toISOString(),
+    dob: "02/02/1992",
+    gender: EUserGender.MALE,
+    name: "Bob Smith",
+  },
+  {
+    id: crypto.randomUUID(),
+    userName: "Charlie",
+    displayName: "Charlie",
+    bio: "Hi, I'm Charlie!",
+    createdAt: new Date().toISOString(),
+    dob: "03/03/1994",
+    gender: EUserGender.MALE,
+    name: "Charlie Brown",
+  },
+];
 
 /////////////////////////
 
@@ -20,14 +52,12 @@ const handleSeedUsers = async (
   userRepo: ReturnType<typeof createUserRepoIdb>
 ) => {
   const users = await userRepo.findAll();
+  console.log("Existing users in DB:", users);
   if (users.length === 0) {
     for (const u of seedUsers) {
       await db.users.add(u);
+      console.log("Seeded user:", u);
     }
-    console.log(
-      "[bootstrap] Seeded users:",
-      seedUsers.map((u) => u.userName)
-    );
   }
 };
 
@@ -51,6 +81,8 @@ export async function bootstrap() {
   socket.connect();
 
   // 4. Register Handlers
+
+  updateLastMsgHandler(eventBus, convRepo);
 
   // 5. Create App Service
 
@@ -76,3 +108,5 @@ export async function bootstrap() {
     socket,
   };
 }
+
+export type TBootstrapReturn = Awaited<ReturnType<typeof bootstrap>>;

@@ -5,10 +5,8 @@ import {
 } from "@/core/domain/conv/entity";
 import { IConvRepo } from "@/core/domain/conv/repo";
 import { IUserEntity } from "@/core/domain/user/entity";
+import { genUUID } from "@/infratructure/indexDB/helper";
 import { IEventBus } from "../eventbus";
-import { ITransactionManager } from "../services-facade";
-import { IConvPartRepo } from "@/core/domain/conv-part/repo";
-import { createConvPart } from "./conv-part.uc";
 
 //////////////////////
 
@@ -19,11 +17,11 @@ export async function getConvById(
   return convRepo.getConvById(id);
 }
 
-export async function getConvsByUserId(
+export async function getConvByUserIds(
   convRepo: IConvRepo,
-  userId: IUserEntity["id"]
-): Promise<IConvEntity[]> {
-  return convRepo.getConvsByUserId(userId);
+  userIds: IUserEntity["id"][]
+): Promise<IConvEntity | null> {
+  return convRepo.getConvByUserIds(userIds);
 }
 
 //////////////////////
@@ -31,9 +29,15 @@ export async function getConvsByUserId(
 export async function createConv(
   convRepo: IConvRepo,
   eventBus: IEventBus,
-  conv?: Parameters<typeof createInitConv>[0]
+  conv: Parameters<typeof createInitConv>[0],
+  userIds?: IUserEntity["id"][]
 ): Promise<IConvEntity> {
-  const initNewConv = createInitConv(conv);
+  const initNewConv = createInitConv(
+    genUUID({
+      ...conv,
+      key: userIds.sort().join(":"),
+    })
+  );
   const newConv = await convRepo.createConv(initNewConv);
   eventBus.publish({
     type: "ConvCreated",
@@ -55,28 +59,4 @@ export async function updateConvLastMessageId(
     payload: updated,
   });
   return updated;
-}
-
-export async function createConvWithParticipants(
-  transactionManager: ITransactionManager,
-  convRepo: IConvRepo,
-  convPartRepo: IConvPartRepo,
-  eventBus: IEventBus,
-  userIds: string[]
-) {
-  return await transactionManager.executeInTransaction(
-    ["conversations", "convParts"],
-    async () => {
-      const newConv = await createConv(convRepo, eventBus);
-      await Promise.all(
-        userIds.map((userId) =>
-          createConvPart(convPartRepo, eventBus, {
-            conversationId: newConv.id,
-            userId,
-          })
-        )
-      );
-      return newConv;
-    }
-  );
 }

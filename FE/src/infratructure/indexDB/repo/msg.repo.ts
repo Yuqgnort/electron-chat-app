@@ -23,5 +23,8 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
         .equals(conversationId)
         .toArray();
     },
+    async findAll() {
+      return db.messages.toArray();
+    },
   };
 }

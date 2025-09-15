@@ -3,6 +3,7 @@ interface UserSockets {
 }
 
 export const userSockets: UserSockets = {};
+
 export const pendingMessages: Record<string, any[]> = {};
 
 export function addUserSocket(userId: string, socketId: string) {

@@ -5,7 +5,10 @@ import { ChatDb } from "../init";
 
 export const createUserRepoIdb = (db: ChatDb): IUserRepo => {
   return {
-    async findAll() {
+    async findAll({ ignoreId } = {}) {
+      if (ignoreId) {
+        return await db.users.where("id").noneOf(ignoreId).toArray();
+      }
       return await db.users.toArray();
     },
     async findById(id) {

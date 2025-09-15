@@ -17,6 +17,9 @@ export async function getUserByUsername(
   return userRepo.findByUserName(username);
 }
 
-export async function getAllUsers(userRepo: IUserRepo): Promise<IUserEntity[]> {
-  return userRepo.findAll();
+export async function getAllUsers(
+  userRepo: IUserRepo,
+  ignoreId?: IUserEntity["id"][]
+): Promise<IUserEntity[]> {
+  return userRepo.findAll({ ignoreId });
 }

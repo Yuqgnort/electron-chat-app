@@ -16,7 +16,7 @@ export class ChatDb extends Dexie {
     super("chat-db");
     this.version(1).stores({
       users: "id, username",
-      conversations: "id, updatedAt",
+      conversations: "id, &key, updatedAt",
       messages: "id, conversationId, localId",
       conversationParts: "id, conversationId, userId",
     });

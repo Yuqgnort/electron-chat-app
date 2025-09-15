@@ -8,6 +8,7 @@ import {
 import { IMsgRepo } from "@/core/domain/msg/repo";
 import { IEventBus } from "../eventbus";
 import { ICommunicationManager } from "../services-facade";
+import { genUUID } from "@/infratructure/indexDB/helper";
 
 /////////////////////
 
@@ -25,6 +26,10 @@ export async function getMsgsByConvId(
   return msgRepo.findByConversationId(conversationId);
 }
 
+export async function getAllMsgs(msgRepo: IMsgRepo): Promise<IMsgEntity[]> {
+  return msgRepo.findAll();
+}
+
 /////////////////////
 
 export async function createMsg(
@@ -33,7 +38,7 @@ export async function createMsg(
   communicationManager: ICommunicationManager,
   msg: Parameters<typeof createInitMsg>[0]
 ): Promise<IMsgEntity> {
-  const initNewMsg = createInitMsg(msg);
+  const initNewMsg = createInitMsg(genUUID(msg));
   const newMsg = await msgRepo.save(initNewMsg);
   eventBus.publish({
     type: "MsgCreated",

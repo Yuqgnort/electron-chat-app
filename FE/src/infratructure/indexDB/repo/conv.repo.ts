@@ -8,7 +8,7 @@ export const createConvRepoIdb = (db: ChatDb): IConvRepo => {
   return {
     async createConv(conv) {
       const id = await db.conversations.add(genUUID(conv));
-      return await db.conversations.get(id);
+      return (await db.conversations.get(id)) || null;
     },
     async getConvById(id) {
       const conv = await db.conversations.get(id);
@@ -24,7 +24,7 @@ export const createConvRepoIdb = (db: ChatDb): IConvRepo => {
     },
     async updateConv(conv) {
       const updated = await db.conversations.put(conv);
-      return await db.conversations.get(updated);
+      return (await db.conversations.get(updated)) || null;
     },
   };
 };

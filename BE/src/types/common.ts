@@ -1,3 +1,9 @@
+import { Socket } from "socket.io";
+
+export interface AuthSocket extends Socket {
+  userId?: string;
+}
+
 export type MessageStatus = "pending" | "sent" | "delivered" | "read";
 
 export interface NewMessage {

@@ -3,8 +3,8 @@ import { create } from "zustand";
 
 export type TChatWindowStore = {
   chatBoxState: {
-    receiverUser?: IUserEntity | null;
-    conversationId?: string | null;
+    receiverUser: IUserEntity | null;
+    conversationId: string | null;
   };
   setChatBoxState: (state: TChatWindowStore["chatBoxState"]) => void;
 };

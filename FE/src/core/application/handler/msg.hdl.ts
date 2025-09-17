@@ -11,7 +11,8 @@ export const updateLastMsgHandler = (
 ) => {
   eventBus.subscribe("MsgCreated", async ({ payload }) => {
     const conv = await convRepo.getConvById(payload.conversationId);
-    await updateConvLastMessageId(convRepo, eventBus, conv, payload.id);
+    conv &&
+      (await updateConvLastMessageId(convRepo, eventBus, conv, payload.id));
   });
 };
 
@@ -25,5 +26,16 @@ export const msgUpdatedHandler = (eventBus: IEventBus, msgRepo: IMsgRepo) => {
       [EMsgStatus.READ]: setMsgRead,
     };
     await msgStatusActionMap[payload.status](msgRepo, eventBus, payload);
+  });
+};
+
+export const updateMsgAckHandler = (eventBus: IEventBus, msgRepo: IMsgRepo) => {
+  eventBus.subscribe("msg:ack", async ({ payload }) => {
+    const res = await msgRepo.updateByLocalId(payload.localId, { ...payload });
+    res &&
+      eventBus.publish({
+        type: "MsgUpdated",
+        payload: res,
+      });
   });
 };

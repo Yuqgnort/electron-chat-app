@@ -1,11 +1,11 @@
-import { IUserEntity } from "../user/entity";
+import { TID } from "../type";
 import { IConvEntity } from "./entity";
 
 /////////////////
 
 export interface IConvRepo {
-  updateConv(conv: IConvEntity): Promise<IConvEntity>;
-  getConvById(id: IConvEntity["id"]): Promise<IConvEntity>;
-  createConv(conv: Omit<IConvEntity, "id">): Promise<IConvEntity>;
-  getConvByUserIds(userIds: IUserEntity["id"][]): Promise<IConvEntity>;
+  getConvById(id: TID): Promise<IConvEntity | null>;
+  updateConv(conv: IConvEntity): Promise<IConvEntity | null>;
+  getConvByUserIds(userIds: TID[]): Promise<IConvEntity | null>;
+  createConv(conv: Omit<IConvEntity, "id">): Promise<IConvEntity | null>;
 }

@@ -1,15 +1,21 @@
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
+import { useAppContext } from "@/ui/context";
 import { LogOut } from "lucide-react";
 
 export function CurrentUser() {
+  const { socket } = useAppContext();
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { setChatBoxState } = useChatWindowStore();
 
   const logOut = () => {
+    console.log("🔌 Disconnecting socket on user logout");
+    socket.disconnect();
     setCurrentUser(null);
     setChatBoxState({ receiverUser: null, conversationId: null });
   };
+
+  if (!currentUser) return null;
 
   return (
     <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">

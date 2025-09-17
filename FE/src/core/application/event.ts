@@ -1,4 +1,5 @@
 import { EMsgStatus } from "../domain/msg/entity";
+import { TTimeStamp } from "../domain/type";
 
 export type TIntegrationReceivedEvent =
   | {
@@ -41,6 +42,6 @@ export type TIntegrationSentEvent =
         senderId: string;
         receiverId: string;
         content: string;
-        createdAt: Date;
+        createdAt: TTimeStamp;
       };
     };

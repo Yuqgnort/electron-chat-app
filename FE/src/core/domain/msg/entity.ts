@@ -1,3 +1,7 @@
+import { TID, TTimeStamp } from "../type";
+
+export type TMsgDirection = "older" | "newer" | "around";
+
 export enum EMsgStatus {
   SENT = "sent",
   READ = "read",
@@ -6,12 +10,12 @@ export enum EMsgStatus {
 }
 
 export interface IMsgEntity {
-  id: string;
+  id: TID;
   localId: string;
-  serverId: string;
+  serverId?: string | null;
   senderId: string;
   content: string;
-  createdAt: Date;
+  createdAt: TTimeStamp;
   status: EMsgStatus;
   receiverId: string;
   conversationId: string;
@@ -28,9 +32,9 @@ export const createInitMsg = (
   return {
     ...params,
     serverId: null,
-    createdAt: new Date(),
     status: EMsgStatus.PENDING,
     localId: crypto.randomUUID(),
+    createdAt: new Date().getTime(),
   };
 };
 

@@ -17,14 +17,14 @@ export async function getConvPartById(
 export async function getConvPartsByConvId(
   convPartRepo: IConvPartRepo,
   convId: IConvPartEntity["conversationId"]
-): Promise<IConvPartEntity[]> {
+) {
   return convPartRepo.getConvPartsByConvId(convId);
 }
 
 export async function getConvPartsByUserId(
   convPartRepo: IConvPartRepo,
   userId: IConvPartEntity["userId"]
-): Promise<IConvPartEntity[]> {
+) {
   return convPartRepo.getConvPartsByUserId(userId);
 }
 
@@ -34,12 +34,13 @@ export async function createConvPart(
   convPartRepo: IConvPartRepo,
   eventBus: IEventBus,
   convPart: Parameters<typeof createInitConvPart>[0]
-): Promise<IConvPartEntity> {
+) {
   const initNewConvPart = createInitConvPart(convPart);
   const newConvPart = await convPartRepo.createConvPart(initNewConvPart);
-  eventBus.publish({
-    type: "ConvPartCreated",
-    payload: newConvPart,
-  });
+  newConvPart &&
+    eventBus.publish({
+      type: "ConvPartCreated",
+      payload: newConvPart,
+    });
   return newConvPart;
 }

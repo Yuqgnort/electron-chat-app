@@ -5,7 +5,7 @@ import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
 
 interface ChatWindowProps {
-  receiverUser?: IUserEntity;
+  receiverUser?: IUserEntity | null;
   onSendMessage?: (content: string) => void;
 }
 
@@ -27,9 +27,11 @@ export function ChatWindow({ receiverUser, onSendMessage }: ChatWindowProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 flex flex-col h-full bg-white">
       <ChatHeader receiverUser={receiverUser} />
-      <MessageList receiverUserId={receiverUser.id} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <MessageList receiverUserId={receiverUser.id} />
+      </div>
       <MessageInput
         onSendMessage={onSendMessage}
         receiverUserId={receiverUser.id}

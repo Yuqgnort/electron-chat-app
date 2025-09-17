@@ -3,40 +3,52 @@ import { TConvEvents } from "../domain/conv/events";
 import { TMsgEvents } from "../domain/msg/events";
 import { TIntegrationReceivedEvent } from "./event";
 
-///////////////////////
-
 export type TEvent =
   | TConvEvents
   | TMsgEvents
   | TConvPartEvents
   | TIntegrationReceivedEvent;
 
-type TEventMap = {
+export type TEventMap = {
   [E in TEvent as E["type"]]: E;
 };
-
-///////////////////////
 
 export interface IEventBus {
   publish<E extends TEvent>(event: E): void;
   subscribe<K extends keyof TEventMap>(
     type: K,
     handler: (event: TEventMap[K]) => void
-  ): void;
+  ): () => void;
 }
 
-///////////////////////
-
 export function createInMemoryEventBus(): IEventBus {
-  const handlers: { [type: string]: ((e: TEvent) => void)[] } = {};
+  type Handlers = { [K in keyof TEventMap]?: Array<(e: TEventMap[K]) => void> };
+  const handlers: Handlers = {};
+
+  function listOf<K extends keyof TEventMap>(type: K) {
+    return (handlers[type] ??= []) as Array<(e: TEventMap[K]) => void>;
+  }
 
   return {
-    publish(event) {
-      (handlers[event.type] || []).forEach((h) => h(event));
+    publish<E extends TEvent>(event: E) {
+      const listeners = handlers[event.type] as
+        | Array<(e: E) => void>
+        | undefined;
+      listeners?.forEach((h) => h(event));
     },
-    subscribe(type, handler) {
-      if (!handlers[type]) handlers[type] = [];
-      handlers[type].push(handler);
+
+    subscribe<K extends keyof TEventMap>(
+      type: K,
+      handler: (event: TEventMap[K]) => void
+    ) {
+      listOf(type).push(handler);
+      return () => {
+        const arr = handlers[type] as
+          | Array<(e: TEventMap[K]) => void>
+          | undefined;
+        if (!arr) return;
+        handlers[type] = arr.filter((h) => h !== handler) as Handlers[K];
+      };
     },
   };
 }

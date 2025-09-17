@@ -17,7 +17,8 @@ export class ChatDb extends Dexie {
     this.version(1).stores({
       users: "id, username",
       conversations: "id, &key, updatedAt",
-      messages: "id, conversationId, localId",
+      messages:
+        "id, conversationId, localId, createdAt, [conversationId+createdAt]",
       conversationParts: "id, conversationId, userId",
     });
   }
@@ -27,6 +28,10 @@ export async function initDb(): Promise<ChatDb> {
   if (!db) {
     db = new ChatDb();
     await db.open();
+    const isHaveUsers = await db.users.count();
+    if (!isHaveUsers) {
+      localStorage.clear();
+    }
   }
   return db;
 }

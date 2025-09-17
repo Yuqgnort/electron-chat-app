@@ -1,7 +1,7 @@
 import { IConvPartRepo } from "../domain/conv-part/repo";
 import { IConvEntity } from "../domain/conv/entity";
 import { IConvRepo } from "../domain/conv/repo";
-import { IMsgEntity } from "../domain/msg/entity";
+import { IMsgEntity, TMsgDirection } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
@@ -9,7 +9,7 @@ import { TIntegrationSentEvent } from "./event";
 import { IEventBus } from "./eventbus";
 import { createConvPart } from "./usecase/conv-part.uc";
 import { createConv } from "./usecase/conv.uc";
-import { createMsg, getAllMsgs } from "./usecase/msg.uc";
+import { createMsg, getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
 import { getAllUsers, getUserById } from "./usecase/user.uc";
 
 type ExtractPayload<
@@ -64,14 +64,15 @@ export function createAppService(
               conv,
               userIds
             );
-            await Promise.all(
-              userIds.map((userId) =>
-                createConvPart(repos.convPartRepo, eventBus, {
-                  conversationId: newConv.id,
-                  userId,
-                })
-              )
-            );
+            newConv &&
+              (await Promise.all(
+                userIds.map((userId) =>
+                  createConvPart(repos.convPartRepo, eventBus, {
+                    conversationId: newConv.id,
+                    userId,
+                  })
+                )
+              ));
             return newConv;
           }
         );
@@ -86,7 +87,7 @@ export function createAppService(
         }>
       > => {
         const userConvParts =
-          await repos.convPartRepo.getConvPartsByUserId(userId);
+          (await repos.convPartRepo.getConvPartsByUserId(userId)) || [];
 
         const convIds = userConvParts.map((cp) => cp.conversationId);
         if (convIds.length === 0) return [];
@@ -98,9 +99,8 @@ export function createAppService(
         );
         const conversationsWithParticipants = await Promise.all(
           validConversations.map(async (conv) => {
-            const convParts = await repos.convPartRepo.getConvPartsByConvId(
-              conv.id
-            );
+            const convParts =
+              (await repos.convPartRepo.getConvPartsByConvId(conv.id)) || [];
 
             const otherConvParts = convParts.filter(
               (convPart) => convPart.userId !== userId
@@ -129,9 +129,7 @@ export function createAppService(
           })
         ).then((res) =>
           res.sort(
-            (a, b) =>
-              b.conversation.updatedAt.getTime() -
-              a.conversation.updatedAt.getTime()
+            (a, b) => b.conversation.updatedAt - a.conversation.updatedAt
           )
         );
         return conversationsWithParticipants;
@@ -152,14 +150,15 @@ export function createAppService(
               conv,
               userIds
             );
-            await Promise.all(
-              userIds.map((userId) =>
-                createConvPart(repos.convPartRepo, eventBus, {
-                  conversationId: newConv.id,
-                  userId,
-                })
-              )
-            );
+            newConv &&
+              (await Promise.all(
+                userIds.map((userId) =>
+                  createConvPart(repos.convPartRepo, eventBus, {
+                    conversationId: newConv.id,
+                    userId,
+                  })
+                )
+              ));
             return newConv;
           }
         );
@@ -170,8 +169,19 @@ export function createAppService(
     msg: {
       sendMessage: (payload: Parameters<typeof createMsg>[3]) =>
         createMsg(repos.msgRepo, eventBus, communicationManager, payload),
-      getMsgsByConvId: async (conversationId: IMsgEntity["conversationId"]) =>
-        repos.msgRepo.findAll(),
+      getMsgsByConvId: async (
+        conversationId: IMsgEntity["conversationId"],
+        limit = 20,
+        direction: TMsgDirection,
+        cursor: number | null
+      ) =>
+        getMsgsByConvId(
+          repos.msgRepo,
+          conversationId,
+          limit,
+          direction,
+          cursor
+        ),
       getAllMsgs: async () => getAllMsgs(repos.msgRepo),
     },
     user: {

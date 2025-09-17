@@ -1,52 +1,107 @@
+import { IMsgEntity, TMsgDirection } from "@/core/domain/msg/entity";
 import { useAppContext } from "@/ui/context";
-import { getStatusIcon } from "@/ui/helper";
+import { mergeKSortedArrays } from "@/ui/helper";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
-import { useGetMessagesByConvId } from "@/ui/hooks/tanstack/msg";
-import { useEffect, useRef } from "react";
+import {
+  GET_MESSAGE_BY_CONV_ID_QUERY_KEY,
+  TGetMessagesByConvIdQueryData,
+  useGetMessagesByConvId,
+} from "@/ui/hooks/tanstack/msg";
+import { useStickToBottomOnLoad } from "@/ui/hooks/useStickToBottomOnLoad";
+import {
+  useSubscribeEventBus,
+  useSubscribeEventBusLayout,
+} from "@/ui/hooks/useSubscribeEventBus";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { MessageItem } from "./MessageItem";
+import { useScrollToBottom } from "@/ui/hooks/useScrollToBottom";
 
-interface MessageListProps {
+type TMessageListProps = {
   receiverUserId: string;
-}
+};
 
-export function MessageList({ receiverUserId: userId }: MessageListProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+const updateMessageInCache = (
+  payload: IMsgEntity,
+  queryClient: QueryClient,
+  conversationId?: string | null,
+  limit: number = 20,
+  direction: TMsgDirection = "older"
+) => {
+  if (!conversationId) return;
+  queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, direction],
+    (oldData) => {
+      if (!oldData || !oldData.pages) return oldData;
+      const rs = {
+        ...oldData,
+        pages: oldData.pages.map((page) =>
+          page
+            ? {
+                ...page,
+                data: page.data.map((msg) =>
+                  msg.localId === payload.localId
+                    ? { ...msg, status: payload.status }
+                    : msg
+                ),
+              }
+            : page
+        ),
+      };
+      return rs;
+    }
+  );
+};
+
+export function MessageList({ receiverUserId: userId }: TMessageListProps) {
+  const queryClient = useQueryClient();
+  const { service, eventBus } = useAppContext();
+
   const { currentUser } = useCurrentUserStore();
   const { chatBoxState } = useChatWindowStore();
-  const { service } = useAppContext();
-  const { data } = useGetMessagesByConvId(service, chatBoxState.conversationId);
 
-  const messages = data || [];
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useGetMessagesByConvId(service, chatBoxState.conversationId);
 
-  const currentUserId = currentUser?.id;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const conversationMessages = messages?.filter(
-    (msg) =>
-      (msg.senderId === currentUserId && msg.receiverId === userId) ||
-      (msg.senderId === userId && msg.receiverId === currentUserId)
-  );
+  const messages = mergeKSortedArrays<IMsgEntity>({
+    arrays: data?.pages.map((page) => page?.data ?? []) || [],
+    compareFn: (a, b) => a.createdAt - b.createdAt,
+  });
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [conversationMessages]);
+  useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
+    updateMessageInCache(payload, queryClient, chatBoxState.conversationId);
+  });
 
-  const formatTime = (dateInput: string | Date) => {
-    const date =
-      typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  };
+  useScrollToBottom({
+    containerRef,
+    dependencies: [messages],
+  });
+
+  useStickToBottomOnLoad({
+    containerRef,
+    deps: [chatBoxState.conversationId],
+  });
+
+  if (!messages || !currentUser) return null;
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
-      {conversationMessages.length === 0 ? (
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50"
+      onScroll={handleScroll}
+    >
+      {messages.length === 0 ? (
         <div className="flex items-center justify-center h-full">
           <p className="text-gray-500">
             No messages yet. Start the conversation!
@@ -54,35 +109,13 @@ export function MessageList({ receiverUserId: userId }: MessageListProps) {
         </div>
       ) : (
         <>
-          {conversationMessages.map((message) => {
-            const isCurrentUser = message.senderId === currentUserId;
-            return (
-              <div
-                key={message.id}
-                className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    isCurrentUser
-                      ? "bg-blue-500 text-white"
-                      : "bg-white text-gray-900 border border-gray-200"
-                  }`}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <div
-                    className={`flex items-center justify-end mt-1 space-x-1 ${
-                      isCurrentUser ? "text-blue-100" : "text-gray-500"
-                    }`}
-                  >
-                    <span className="text-xs">
-                      {formatTime(message.createdAt)}
-                    </span>
-                    {isCurrentUser && getStatusIcon(message.status)}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {messages.map((message) => (
+            <MessageItem
+              message={message}
+              key={message.localId}
+              isCurrentUser={message.senderId === currentUser.id}
+            />
+          ))}
         </>
       )}
       <div ref={messagesEndRef} />

@@ -10,6 +10,8 @@ export interface ISocketClient extends ICommunicationManager {
   connect(): void;
   disconnect(): void;
   register(userId: string): void;
+  isConnected(): boolean;
+  connectAndRegister(userId: string): void;
 }
 
 type TExtractPayload<T, U extends Event["type"]> = T extends {
@@ -64,6 +66,26 @@ export function createSocketClient(
     disconnect() {
       socket?.disconnect();
       socket = null;
+    },
+    isConnected() {
+      return socket?.connected ?? false;
+    },
+    connectAndRegister(userId: string) {
+      if (!socket) {
+        this.connect();
+      }
+
+      const registerUser = () => {
+        if (socket && socket.connected) {
+          socket.emit("register", { userId });
+        }
+      };
+
+      if (socket?.connected) {
+        registerUser();
+      } else {
+        socket?.on("connect", registerUser);
+      }
     },
     register(userId: string) {
       if (!socket || !socket.connected) {

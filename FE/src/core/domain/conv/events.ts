@@ -1,4 +1,3 @@
-import { IMsgEntity } from "../msg/entity";
 import { IConvEntity } from "./entity";
 
 /////////////////

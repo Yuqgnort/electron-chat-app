@@ -1,3 +1,5 @@
+import { TID, TTimeStamp } from "../type";
+
 export enum EUserGender {
   MALE = "male",
   OTHER = "other",
@@ -5,12 +7,12 @@ export enum EUserGender {
 }
 
 export interface IUserEntity {
-  id: string;
+  id: TID;
   dob: string;
   bio: string;
   name: string;
   userName: string;
-  createdAt: string;
+  createdAt: TTimeStamp;
   displayName: string;
   gender: EUserGender;
 }

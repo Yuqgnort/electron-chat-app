@@ -12,10 +12,12 @@ export const createUserRepoIdb = (db: ChatDb): IUserRepo => {
       return await db.users.toArray();
     },
     async findById(id) {
-      return await db.users.get(id);
+      return (await db.users.get(id)) || null;
     },
     async findByUserName(username) {
-      return await db.users.where("username").equals(username).first();
+      return (
+        (await db.users.where("username").equals(username).first()) || null
+      );
     },
   };
 };

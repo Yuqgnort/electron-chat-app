@@ -30,8 +30,8 @@ export async function createConv(
   convRepo: IConvRepo,
   eventBus: IEventBus,
   conv: Parameters<typeof createInitConv>[0],
-  userIds?: IUserEntity["id"][]
-): Promise<IConvEntity> {
+  userIds: IUserEntity["id"][]
+) {
   const initNewConv = createInitConv(
     genUUID({
       ...conv,
@@ -39,10 +39,11 @@ export async function createConv(
     })
   );
   const newConv = await convRepo.createConv(initNewConv);
-  eventBus.publish({
-    type: "ConvCreated",
-    payload: newConv,
-  });
+  newConv &&
+    eventBus.publish({
+      type: "ConvCreated",
+      payload: newConv,
+    });
   return newConv;
 }
 
@@ -51,7 +52,8 @@ export async function updateConvLastMessageId(
   eventBus: IEventBus,
   conv: IConvEntity,
   msgId: IConvEntity["lastMessageId"]
-): Promise<IConvEntity> {
+) {
+  if (!conv || !msgId) return null;
   const updated = updateLastMessageId(conv, msgId);
   await convRepo.updateConv(updated);
   eventBus.publish({

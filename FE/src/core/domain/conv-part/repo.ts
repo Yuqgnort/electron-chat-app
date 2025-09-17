@@ -1,5 +1,4 @@
-import { IConvEntity } from "../conv/entity";
-import { IUserEntity } from "../user/entity";
+import { TID } from "../type";
 import { IConvPartEntity } from "./entity";
 
 /////////////////
@@ -7,8 +6,8 @@ import { IConvPartEntity } from "./entity";
 export interface IConvPartRepo {
   createConvPart(
     convPart: Omit<IConvPartEntity, "id">
-  ): Promise<IConvPartEntity>;
-  getConvPartById(id: IConvPartEntity["id"]): Promise<IConvPartEntity | null>;
-  getConvPartsByConvId(convId: IConvEntity["id"]): Promise<IConvPartEntity[]>;
-  getConvPartsByUserId(userId: IUserEntity["id"]): Promise<IConvPartEntity[]>;
+  ): Promise<IConvPartEntity | null>;
+  getConvPartById(id: TID): Promise<IConvPartEntity | null>;
+  getConvPartsByConvId(convId: TID): Promise<IConvPartEntity[] | null>;
+  getConvPartsByUserId(userId: TID): Promise<IConvPartEntity[] | null>;
 }

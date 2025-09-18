@@ -28,17 +28,3 @@ export function useGetUsersWithIgnoreIds(
     queryFn: async () => await service.user.getAllUsersIgnore(ignoredIds),
   });
 }
-
-export function useGetConvByUserIds(
-  service: TBootstrapReturn["service"],
-  options?: Omit<
-    UseMutationOptions<IConvEntity, Error, string[], unknown>,
-    "mutationFn"
-  >
-) {
-  return useMutation({
-    mutationFn: async (userIds: IUserEntity["id"][]) =>
-      await service.conv.getConvByUserIds(userIds),
-    ...options,
-  });
-}

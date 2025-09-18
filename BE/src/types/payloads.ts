@@ -22,7 +22,8 @@ export interface EventPayloads {
 
   [ChatEvent.MESSAGE_INCOMING]: {
     serverId: string;
-    from: string;
+    senderId: string;
+    receiverId: string;
     content: string;
   };
 

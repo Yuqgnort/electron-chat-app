@@ -1,5 +1,6 @@
 import { TBootstrapReturn } from "@/bootstrap";
-import { TMsgDirection } from "@/core/domain/msg/entity";
+import { IMsgEntity, TMsgDirection } from "@/core/domain/msg/entity";
+import { mergeKSortedArrays } from "@/ui/helper";
 import { InfiniteData, useInfiniteQuery } from "@tanstack/react-query";
 
 export type TGetMessagesByConvIdResponse = Awaited<
@@ -29,6 +30,13 @@ export const useGetMessagesByConvId = (
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage?.nextCursor ?? null,
     enabled: !!convId,
-    
+    select: (data) => {
+      const rs = mergeKSortedArrays<IMsgEntity>({
+        arrays: data?.pages.map((page) => page?.data ?? []) || [],
+        compareFn: (a, b) => a.createdAt - b.createdAt,
+      });
+
+      return rs;
+    },
   });
 };

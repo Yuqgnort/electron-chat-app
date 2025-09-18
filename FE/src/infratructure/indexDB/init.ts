@@ -18,7 +18,7 @@ export class ChatDb extends Dexie {
       users: "id, username",
       conversations: "id, &key, updatedAt",
       messages:
-        "id, conversationId, localId, createdAt, [conversationId+createdAt]",
+        "id, conversationId, serverId ,localId, createdAt, [conversationId+createdAt]",
       conversationParts: "id, conversationId, userId",
     });
   }

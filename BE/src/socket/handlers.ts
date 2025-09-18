@@ -5,6 +5,7 @@ import { ChatEvent } from "../types/events";
 import { EventPayloads } from "../types/payloads";
 import {
   addPendingMessage,
+  addServerIdMapping,
   addUserSocket,
   clearPendingMessages,
   getPendingMessages,
@@ -30,7 +31,6 @@ function handleRegister(socket: AuthSocket, io: Server) {
     addUserSocket(userId, socket.id);
     socket.userId = userId;
     console.log(`User ${userId} online`);
-    // Replay pending messages
     const pending = getPendingMessages(userId);
     if (pending.length > 0) {
       pending.forEach((msg) => {
@@ -43,29 +43,38 @@ function handleRegister(socket: AuthSocket, io: Server) {
 
 function handleMessageSend(socket: AuthSocket, io: Server) {
   return (params: EventPayloads[ChatEvent.MESSAGE_SEND]) => {
-    const { localId, receiverId, content } = params;
+    const { localId, receiverId, content, senderId } = params;
     const serverId = uuidv4();
     const fromUser = socket.userId;
+
+    if (!fromUser) {
+      console.error("User not registered on socket");
+      return;
+    }
+
+    // Store serverId to senderId mapping for tracking
+    addServerIdMapping(serverId, fromUser);
 
     socket.emit(ChatEvent.MESSAGE_ACK, {
       localId,
       serverId,
       status: "sent",
     });
-
     if (isUserOnline(receiverId)) {
       const socketIds = getUserSocketIds(receiverId);
       socketIds.forEach((sid) => {
         io.to(sid).emit(ChatEvent.MESSAGE_INCOMING, {
           serverId,
-          from: fromUser,
           content,
+          senderId: fromUser,
+          receiverId: receiverId,
         });
       });
     } else {
       addPendingMessage(receiverId, {
         serverId,
-        from: fromUser,
+        senderId,
+        receiverId,
         content,
       });
     }

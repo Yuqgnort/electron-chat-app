@@ -1,3 +1,4 @@
+import { IUserEntity } from "@/core/domain/user/entity";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatWindow } from "./components/Chat/ChatWindow";
 import {
@@ -15,17 +16,16 @@ import { GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID } from "./hooks/tanstack/co
 import { GET_MESSAGE_BY_CONV_ID_QUERY_KEY } from "./hooks/tanstack/msg";
 import { useGetUsers } from "./hooks/tanstack/user";
 import { useConnectSocket } from "./hooks/useConnectSocket";
-import { IUserEntity } from "@/core/domain/user/entity";
-import { c } from "node_modules/framer-motion/dist/types.d-Cjd591yU";
+import { useSubscribeEventBus } from "./hooks/useSubscribeEventBus";
 
 ////////////////////
 
 export function App() {
   const queryClient = useQueryClient();
-  const { service, socket } = useAppContext();
+  const { service, socket, eventBus } = useAppContext();
 
-  const { chatBoxState, setChatBoxState } = useChatWindowStore();
   const { currentUser, setCurrentUser } = useCurrentUserStore();
+  const { chatBoxState, setChatBoxState } = useChatWindowStore();
 
   const { data: users } = useGetUsers(service);
 
@@ -64,15 +64,10 @@ export function App() {
       const conversationId = await ensureConversationId();
       await service.msg.sendMessage({
         content,
-        senderId: currentUser.id,
         conversationId,
+        senderId: currentUser.id,
         receiverId: chatBoxState.receiverUser.id,
-      });
-      await queryClient.invalidateQueries({
-        queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId],
+        serverId: null,
       });
     } catch (error) {
       throw error;
@@ -86,6 +81,15 @@ export function App() {
   };
 
   useConnectSocket(socket, currentUser?.id);
+
+  useSubscribeEventBus(eventBus, "ConvLastMessageChanged", async (conv) => {
+    await queryClient.invalidateQueries({
+      queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conv.id],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser?.id],
+    });
+  });
 
   if (!users) return null;
 

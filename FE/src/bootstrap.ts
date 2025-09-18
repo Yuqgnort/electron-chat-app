@@ -11,13 +11,16 @@ import { createAppService } from "./core/application/services-facade";
 import {
   updateLastMsgHandler,
   updateMsgAckHandler,
+  updateMsgDeliveredHandler,
+  updateMsgIncomingHandler,
+  updateMsgReadHandler,
 } from "./core/application/handler/msg.hdl";
 
 /////////////////////////
 
 const seedUsers: IUserEntity[] = [
   {
-    id: crypto.randomUUID(),
+    id: "1-alice",
     userName: "Alice",
     displayName: "Alice",
     bio: "Hello, I'm Alice!",
@@ -27,7 +30,7 @@ const seedUsers: IUserEntity[] = [
     name: "Alice Johnson",
   },
   {
-    id: crypto.randomUUID(),
+    id: "2-bob",
     userName: "Bob",
     displayName: "Bob",
     bio: "Hey there, I'm Bob.",
@@ -37,7 +40,7 @@ const seedUsers: IUserEntity[] = [
     name: "Bob Smith",
   },
   {
-    id: crypto.randomUUID(),
+    id: "3-charlie",
     userName: "Charlie",
     displayName: "Charlie",
     bio: "Hi, I'm Charlie!",
@@ -54,7 +57,7 @@ const handleSeedUsers = async (
   db: ChatDb,
   userRepo: ReturnType<typeof createUserRepoIdb>
 ) => {
-  const users = (await userRepo.findAll()) || [];
+  const users = (await userRepo.getAll()) || [];
   if (users.length === 0) {
     for (const u of seedUsers) {
       await db.users.add(u);
@@ -74,21 +77,30 @@ export async function bootstrap() {
 
   await handleSeedUsers(db, userRepo);
 
+  const transactionManager = createIndexedDBTransactionManager(db);
+
   // 2. Init EventBus
   const eventBus = createInMemoryEventBus();
 
   // 3. Init Socket - Create socket client but don't connect yet
   const socket = createSocketClient("ws://localhost:3000", eventBus);
-  // Note: Socket will connect and register when user is selected
 
   // 4. Register Handlers
 
   updateLastMsgHandler(eventBus, convRepo);
   updateMsgAckHandler(eventBus, msgRepo);
+  updateMsgDeliveredHandler(eventBus, msgRepo);
+  updateMsgReadHandler(eventBus, msgRepo);
+  updateMsgIncomingHandler(
+    eventBus,
+    msgRepo,
+    convRepo,
+    convPartRepo,
+    transactionManager,
+    socket
+  );
 
   // 5. Create App Service
-
-  const transactionManager = createIndexedDBTransactionManager(db);
 
   const service = createAppService(
     {

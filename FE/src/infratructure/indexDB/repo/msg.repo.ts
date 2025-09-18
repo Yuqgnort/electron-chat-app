@@ -17,20 +17,23 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
       await db.messages.update(msg.id, msg);
       return (await db.messages.get(msg.id)) || null;
     },
-    async updateByLocalId(localId, updateFields) {
-      const msg = await db.messages.where("localId").equals(localId).first();
-      if (!msg) return null;
-      await db.messages.update(msg.id, updateFields);
-      return (await db.messages.get(msg.id)) || null;
+    async getByLocalId(localId) {
+      return (
+        (await db.messages.where("localId").equals(localId).first()) || null
+      );
     },
-    async findById(id) {
+    async getById(id) {
       return (await db.messages.get(id)) || null;
     },
-
-    async findAll() {
+    async getByServerId(serverId) {
+      return (
+        (await db.messages.where("serverId").equals(serverId).first()) || null
+      );
+    },
+    async getAll() {
       return db.messages.toArray();
     },
-    async findByConversationId(
+    async getByConversationId(
       conversationId,
       limit = 20,
       direction = "older",

@@ -7,14 +7,14 @@ import {
   TMsgDirection,
 } from "@/core/domain/msg/entity";
 import { IMsgRepo } from "@/core/domain/msg/repo";
+import { genUUID } from "@/infratructure/indexDB/helper";
 import { IEventBus } from "../eventbus";
 import { ICommunicationManager } from "../services-facade";
-import { genUUID } from "@/infratructure/indexDB/helper";
 
 /////////////////////
 
 export async function getMsgById(msgRepo: IMsgRepo, id: IMsgEntity["id"]) {
-  return msgRepo.findById(id);
+  return msgRepo.getById(id);
 }
 
 export async function getMsgsByConvId(
@@ -24,11 +24,22 @@ export async function getMsgsByConvId(
   direction: TMsgDirection,
   cursor: IMsgEntity["createdAt"] | null
 ) {
-  return msgRepo.findByConversationId(conversationId, limit, direction, cursor);
+  return msgRepo.getByConversationId(conversationId, limit, direction, cursor);
 }
 
 export async function getAllMsgs(msgRepo: IMsgRepo) {
-  return msgRepo.findAll();
+  return msgRepo.getAll();
+}
+
+export async function getByLocalId(
+  msgRepo: IMsgRepo,
+  localId: IMsgEntity["localId"]
+) {
+  return msgRepo.getByLocalId(localId);
+}
+
+export async function getByServerId(msgRepo: IMsgRepo, serverId: string) {
+  return msgRepo.getByServerId(serverId);
 }
 
 /////////////////////
@@ -36,7 +47,6 @@ export async function getAllMsgs(msgRepo: IMsgRepo) {
 export async function createMsg(
   msgRepo: IMsgRepo,
   eventBus: IEventBus,
-  communicationManager: ICommunicationManager,
   msg: Parameters<typeof createInitMsg>[0]
 ) {
   const initNewMsg = createInitMsg(genUUID(msg));
@@ -46,15 +56,6 @@ export async function createMsg(
       type: "MsgCreated",
       payload: newMsg,
     });
-  newMsg &&
-    (await communicationManager.sendMessage({
-      content: newMsg.content,
-      conversationId: newMsg.conversationId,
-      localId: newMsg.localId,
-      senderId: newMsg.senderId,
-      receiverId: newMsg.receiverId,
-      createdAt: newMsg.createdAt,
-    }));
   return newMsg;
 }
 
@@ -64,6 +65,7 @@ export async function setMsgSent(
   msg: IMsgEntity
 ) {
   const updated = markMsgAsSent(msg);
+
   await msgRepo.update(updated);
   eventBus.publish({
     type: "MsgUpdated",

@@ -9,7 +9,6 @@ export function CurrentUser() {
   const { setChatBoxState } = useChatWindowStore();
 
   const logOut = () => {
-    console.log("🔌 Disconnecting socket on user logout");
     socket.disconnect();
     setCurrentUser(null);
     setChatBoxState({ receiverUser: null, conversationId: null });

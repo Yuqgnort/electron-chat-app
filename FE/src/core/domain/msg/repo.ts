@@ -3,17 +3,15 @@ import { IMsgEntity, TMsgDirection } from "./entity";
 
 export interface IMsgRepo {
   update(msg: IMsgEntity): Promise<IMsgEntity | null>;
-  updateByLocalId(
-    localId: IMsgEntity["localId"],
-    updateFields: Partial<Omit<IMsgEntity, "id">>
-  ): Promise<IMsgEntity | null>;
-  findById(id: TID): Promise<IMsgEntity | null>;
+  getByLocalId(localId: IMsgEntity["localId"]): Promise<IMsgEntity | null>;
+  getById(id: TID): Promise<IMsgEntity | null>;
+  getByServerId(serverId: string): Promise<IMsgEntity | null>;
   save(msg: Omit<IMsgEntity, "id">): Promise<IMsgEntity | null>;
-  findByConversationId(
+  getByConversationId(
     conversationId: TID,
     limit: number,
     direction: TMsgDirection,
     cursor: TTimeStamp | null
   ): Promise<TPaginationResult<IMsgEntity, TTimeStamp> | null>;
-  findAll(): Promise<IMsgEntity[] | null>;
+  getAll(): Promise<IMsgEntity[] | null>;
 }

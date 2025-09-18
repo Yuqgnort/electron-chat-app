@@ -1,7 +1,14 @@
 import { Server } from "socket.io";
-import { userSockets, pendingMessages } from "./state";
+import { userSockets, pendingMessages, getServerIdSender } from "./state";
 
 export function findSender(serverId: string): string {
+  // First try to find in the serverId mapping
+  const sender = getServerIdSender(serverId);
+  if (sender) {
+    return sender;
+  }
+
+  // Fallback to searching pending messages (for backward compatibility)
   for (const user in pendingMessages) {
     for (const msg of pendingMessages[user]) {
       if (msg.serverId === serverId) return msg.from;

@@ -1,6 +1,5 @@
 import { IMsgEntity, TMsgDirection } from "@/core/domain/msg/entity";
 import { useAppContext } from "@/ui/context";
-import { mergeKSortedArrays } from "@/ui/helper";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import {
@@ -8,15 +7,12 @@ import {
   TGetMessagesByConvIdQueryData,
   useGetMessagesByConvId,
 } from "@/ui/hooks/tanstack/msg";
-import { useStickToBottomOnLoad } from "@/ui/hooks/useStickToBottomOnLoad";
-import {
-  useSubscribeEventBus,
-  useSubscribeEventBusLayout,
-} from "@/ui/hooks/useSubscribeEventBus";
-import { QueryClient, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { MessageItem } from "./MessageItem";
 import { useScrollToBottom } from "@/ui/hooks/useScrollToBottom";
+import { useStickToBottomOnLoad } from "@/ui/hooks/useStickToBottomOnLoad";
+import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
+import { MessageItem } from "./MessageItem";
 
 type TMessageListProps = {
   receiverUserId: string;
@@ -54,6 +50,55 @@ const updateMessageInCache = (
   );
 };
 
+const addNewMessageToLastPageCache = (
+  payload: IMsgEntity,
+  queryClient: QueryClient,
+  conversationId?: string | null,
+  limit: number = 20,
+  direction: TMsgDirection = "older"
+) => {
+  if (!conversationId) return;
+  queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, direction],
+    (oldData) => {
+      if (!oldData || !oldData.pages || oldData.pages.length === 0) {
+        return {
+          pages: [
+            {
+              data: [payload],
+              nextCursor: null,
+              prevCursor: null,
+            },
+          ],
+          pageParams: [0],
+        };
+      }
+
+      const lastPageIndex = oldData.pages.length - 1;
+      const lastPage = oldData.pages[lastPageIndex];
+
+      const updatedLastPage = lastPage
+        ? {
+            ...lastPage,
+            data: [...lastPage.data, payload],
+          }
+        : {
+            data: [payload],
+            nextCursor: null,
+            prevCursor: null,
+          };
+
+      const updatedPages = [...oldData.pages];
+      updatedPages[lastPageIndex] = updatedLastPage;
+
+      return {
+        ...oldData,
+        pages: updatedPages,
+      };
+    }
+  );
+};
+
 export function MessageList({ receiverUserId: userId }: TMessageListProps) {
   const queryClient = useQueryClient();
   const { service, eventBus } = useAppContext();
@@ -61,16 +106,15 @@ export function MessageList({ receiverUserId: userId }: TMessageListProps) {
   const { currentUser } = useCurrentUserStore();
   const { chatBoxState } = useChatWindowStore();
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useGetMessagesByConvId(service, chatBoxState.conversationId);
+  const {
+    data: messages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useGetMessagesByConvId(service, chatBoxState.conversationId);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const messages = mergeKSortedArrays<IMsgEntity>({
-    arrays: data?.pages.map((page) => page?.data ?? []) || [],
-    compareFn: (a, b) => a.createdAt - b.createdAt,
-  });
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -81,6 +125,10 @@ export function MessageList({ receiverUserId: userId }: TMessageListProps) {
 
   useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
     updateMessageInCache(payload, queryClient, chatBoxState.conversationId);
+  });
+
+  useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
+    addNewMessageToLastPageCache(payload, queryClient, payload.conversationId);
   });
 
   useScrollToBottom({

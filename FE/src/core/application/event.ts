@@ -24,7 +24,12 @@ export type TIntegrationReceivedEvent =
     }
   | {
       type: "msg:incoming";
-      payload: { serverId: string; from: string; content: string };
+      payload: {
+        serverId: string;
+        senderId: string;
+        receiverId: string;
+        content: string;
+      };
     };
 
 export type TIntegrationSentEvent =
@@ -44,4 +49,8 @@ export type TIntegrationSentEvent =
         content: string;
         createdAt: TTimeStamp;
       };
+    }
+  | {
+      type: "msg:delivered";
+      payload: { serverId: string };
     };

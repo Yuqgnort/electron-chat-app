@@ -12,7 +12,7 @@ export enum EMsgStatus {
 export interface IMsgEntity {
   id: TID;
   localId: string;
-  serverId?: string | null;
+  serverId: string | null;
   senderId: string;
   content: string;
   createdAt: TTimeStamp;
@@ -24,23 +24,17 @@ export interface IMsgEntity {
 ///////////////////
 
 export const createInitMsg = (
-  params: Omit<
-    IMsgEntity,
-    "id" | "createdAt" | "status" | "localId" | "serverId"
-  >
+  params: Omit<IMsgEntity, "id" | "createdAt" | "status" | "localId">
 ): Omit<IMsgEntity, "id"> => {
   return {
-    ...params,
-    serverId: null,
     status: EMsgStatus.PENDING,
+    ...params,
     localId: crypto.randomUUID(),
     createdAt: new Date().getTime(),
   };
 };
 
 export const markMsgAsSent = (msg: IMsgEntity): IMsgEntity => {
-  if (msg.status !== EMsgStatus.PENDING)
-    throw new Error("Only pending msg can be marked as sent");
   return {
     ...msg,
     status: EMsgStatus.SENT,
@@ -48,8 +42,6 @@ export const markMsgAsSent = (msg: IMsgEntity): IMsgEntity => {
 };
 
 export const markMsgAsDelivered = (msg: IMsgEntity): IMsgEntity => {
-  if (msg.status !== EMsgStatus.SENT)
-    throw new Error("Only sent msg can be marked as delivered");
   return {
     ...msg,
     status: EMsgStatus.DELIVERED,
@@ -57,8 +49,6 @@ export const markMsgAsDelivered = (msg: IMsgEntity): IMsgEntity => {
 };
 
 export const markMsgAsRead = (msg: IMsgEntity): IMsgEntity => {
-  if (msg.status !== EMsgStatus.DELIVERED)
-    throw new Error("Only delivered msg can be marked as read");
   return {
     ...msg,
     status: EMsgStatus.READ,

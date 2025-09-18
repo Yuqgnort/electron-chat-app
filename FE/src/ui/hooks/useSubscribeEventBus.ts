@@ -5,7 +5,7 @@ export function useSubscribeEventBus<K extends keyof TEventMap>(
   eventBus: IEventBus,
   eventType: K,
   triggerFunc: (payload: TEventMap[K]["payload"]) => void | Promise<void>,
-  dependencies: DependencyList[] = []
+  dependencies: DependencyList = []
 ) {
   useEffect(() => {
     const unsubscribe = eventBus.subscribe(eventType, (event) => {
@@ -21,7 +21,7 @@ export function useSubscribeEventBusLayout<K extends keyof TEventMap>(
   eventBus: IEventBus,
   eventType: K,
   triggerFunc: (payload: TEventMap[K]["payload"]) => void | Promise<void>,
-  dependencies: DependencyList[] = []
+  dependencies: DependencyList = []
 ) {
   useLayoutEffect(() => {
     const unsubscribe = eventBus.subscribe(eventType, (event) => {

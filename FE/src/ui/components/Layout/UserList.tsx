@@ -2,10 +2,8 @@ import { IUserEntity } from "@/core/domain/user/entity";
 import { useAppContext } from "@/ui/context";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
-import {
-  useGetConvByUserIds,
-  useGetUsersWithIgnoreIds,
-} from "@/ui/hooks/tanstack/user";
+import { useGetConvByUserIds } from "@/ui/hooks/tanstack/conv";
+import { useGetUsersWithIgnoreIds } from "@/ui/hooks/tanstack/user";
 
 export function UserList() {
   const { service } = useAppContext();
@@ -20,6 +18,7 @@ export function UserList() {
   const { mutateAsync: fetchConversations } = useGetConvByUserIds(service);
 
   const handleSelectUser = async (user: IUserEntity) => {
+    if (!currentUser) throw new Error("Current user is not set");
     try {
       const convs = await fetchConversations([currentUser.id, user.id]);
       setChatBoxState({

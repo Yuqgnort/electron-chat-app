@@ -54,6 +54,8 @@ export function createSocketClient(
         });
       });
       socket.on("msg:delivered", (rp) => {
+        console.log("Received msg:delivered event from socket:", rp);
+
         eventBus.publish({ type: "msg:delivered", payload: rp });
       });
       socket.on("msg:read", (rp) => {
@@ -105,6 +107,12 @@ export function createSocketClient(
         content: msg.content,
         createdAt: msg.createdAt,
       });
+    },
+    async deliverMessage(payload): Promise<void> {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("msg:delivered", payload);
     },
   };
 }

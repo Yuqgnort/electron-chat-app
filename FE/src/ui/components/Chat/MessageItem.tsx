@@ -11,11 +11,11 @@ export type TMessageItemProps = {
 export const MessageItem = memo(
   ({ message, isCurrentUser }: TMessageItemProps) => {
     return (
-      <div
-        // layout
-        // initial={{ opacity: 0.5, scale: 0.95 }}
-        // animate={{ opacity: 1, scale: 1 }}
-        // transition={{ duration: 0.2 }}
+      <motion.div
+        layout
+        initial={{ opacity: 0.5, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.2 }}
         className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
       >
         <div
@@ -35,7 +35,7 @@ export const MessageItem = memo(
             {isCurrentUser && getStatusIcon(message.status)}
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 );

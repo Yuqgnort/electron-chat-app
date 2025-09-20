@@ -2,9 +2,11 @@ import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useAppContext } from "@/ui/context";
 import { LogOut } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function CurrentUser() {
   const { socket } = useAppContext();
+  const queryClient = useQueryClient();
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { setChatBoxState } = useChatWindowStore();
 
@@ -12,6 +14,7 @@ export function CurrentUser() {
     socket.disconnect();
     setCurrentUser(null);
     setChatBoxState({ receiverUser: null, conversationId: null });
+    queryClient.clear();
   };
 
   if (!currentUser) return null;

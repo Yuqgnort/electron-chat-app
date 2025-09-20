@@ -5,4 +5,11 @@ export enum ChatEvent {
   MESSAGE_INCOMING = "msg:incoming",
   MESSAGE_DELIVERED = "msg:delivered",
   MESSAGE_READ = "msg:read",
+  TYPING_START = "typing:start",
+  TYPING_STOP = "typing:stop",
+  TYPING_INDICATOR = "typing:indicator",
+  USER_ONLINE = "user:online",
+  USER_OFFLINE = "user:offline",
+  ONLINE_STATUS_REQUEST = "status:request",
+  ONLINE_STATUS_RESPONSE = "status:response",
 }

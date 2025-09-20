@@ -1,12 +1,14 @@
 import { TConvPartEvents } from "../domain/conv-part/events";
 import { TConvEvents } from "../domain/conv/events";
 import { TMsgEvents } from "../domain/msg/events";
+import { TPendingMsgEvents } from "../domain/pending-msg/events";
 import { TIntegrationReceivedEvent } from "./event";
 
 export type TEvent =
   | TConvEvents
   | TMsgEvents
   | TConvPartEvents
+  | TPendingMsgEvents
   | TIntegrationReceivedEvent;
 
 export type TEventMap = {

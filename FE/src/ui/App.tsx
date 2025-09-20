@@ -1,3 +1,4 @@
+import { EMsgStatus } from "@/core/domain/msg/entity";
 import { IUserEntity } from "@/core/domain/user/entity";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatWindow } from "./components/Chat/ChatWindow";
@@ -12,11 +13,10 @@ import { MainLayout } from "./components/Layout/MainLayout";
 import { useAppContext } from "./context";
 import { useChatWindowStore } from "./hooks/store/useChatWindow";
 import { useCurrentUserStore } from "./hooks/store/useCurrentUser";
-import { GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID } from "./hooks/tanstack/conv";
-import { GET_MESSAGE_BY_CONV_ID_QUERY_KEY } from "./hooks/tanstack/msg";
 import { useGetUsers } from "./hooks/tanstack/user";
 import { useConnectSocket } from "./hooks/useConnectSocket";
-import { useSubscribeEventBus } from "./hooks/useSubscribeEventBus";
+import { useCheckIsOnNetwork } from "./hooks/useCheckIsOnline";
+import { GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID } from "./hooks/tanstack/conv";
 
 ////////////////////
 
@@ -68,6 +68,10 @@ export function App() {
         senderId: currentUser.id,
         receiverId: chatBoxState.receiverUser.id,
         serverId: null,
+        status: EMsgStatus.PENDING,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser.id],
       });
     } catch (error) {
       throw error;
@@ -81,15 +85,7 @@ export function App() {
   };
 
   useConnectSocket(socket, currentUser?.id);
-
-  useSubscribeEventBus(eventBus, "ConvLastMessageChanged", async (conv) => {
-    await queryClient.invalidateQueries({
-      queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conv.id],
-    });
-    await queryClient.invalidateQueries({
-      queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser?.id],
-    });
-  });
+  useCheckIsOnNetwork();
 
   if (!users) return null;
 
@@ -118,8 +114,8 @@ export function App() {
   return (
     <MainLayout>
       <ChatWindow
-        receiverUser={chatBoxState?.receiverUser}
         onSendMessage={handleSendMessage}
+        receiverUser={chatBoxState?.receiverUser}
       />
     </MainLayout>
   );

@@ -1,20 +1,25 @@
 import { IConvEntity } from "@/core/domain/conv/entity";
 import { IUserEntity } from "@/core/domain/user/entity";
 import { useAppContext } from "@/ui/context";
-import { getStatusIcon } from "@/ui/helper";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetConvWithParticipantsByUserId } from "@/ui/hooks/tanstack/conv";
+import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
 import { MessagesSquare } from "lucide-react";
+import { ConvItem } from "./ConvItem";
+import { useEffect, useState } from "react";
+import { SidebarTab } from "./Sidebar";
 
-export function ConvList() {
-  const { service } = useAppContext();
+export function ConvList({ activeTab }: { activeTab: SidebarTab }) {
+  const { service, eventBus } = useAppContext();
   const { currentUser } = useCurrentUserStore();
-  const { setChatBoxState } = useChatWindowStore();
+  const { setChatBoxState, chatBoxState } = useChatWindowStore();
+  const [isHaveNewMessage, setIsHaveNewMessage] = useState(false);
 
-  const { data: conversations } = useGetConvWithParticipantsByUserId(
+  const { data: conversations, refetch } = useGetConvWithParticipantsByUserId(
     service,
-    currentUser?.id
+    currentUser?.id,
+    activeTab === SidebarTab.CONVERSATIONS
   );
 
   const onSelectConversation = (
@@ -23,11 +28,23 @@ export function ConvList() {
   ) => {
     setChatBoxState({
       conversationId: conversation.id,
-      receiverUser: otherParticipants.find(
-        (user) => user.id !== currentUser?.id
-      ),
+      receiverUser:
+        otherParticipants.find((user) => user.id !== currentUser?.id) || null,
     });
+    setIsHaveNewMessage(false);
   };
+
+  useSubscribeEventBus(eventBus, "ConvCreated", async () => {
+    await refetch();
+  });
+
+  useSubscribeEventBus(eventBus, "MsgCreated", async () => {
+    await refetch();
+  });
+
+  useSubscribeEventBus(eventBus, "MsgUpdated", async () => {
+    await refetch();
+  });
 
   if (!currentUser || !conversations || conversations.length === 0) {
     return (
@@ -52,56 +69,15 @@ export function ConvList() {
           const otherUser = conv.otherParticipants[0];
           if (!otherUser) return null;
           return (
-            <div
+            <ConvItem
               key={conv.conversation.id}
-              onClick={() =>
-                onSelectConversation(conv.conversation, conv.otherParticipants)
-              }
-              className={`px-4 py-3 cursor-pointer border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                currentUser?.id === otherUser.id
-                  ? "bg-blue-50 border-l-4 border-l-blue-500"
-                  : ""
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-gray-700">
-                      {otherUser.displayName.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {otherUser.displayName}
-                    </p>
-                    <div className="text-xs text-gray-400">
-                      {conv.lastMessage
-                        ? new Date(
-                            conv.lastMessage.createdAt
-                          ).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="mt-1 mb-1"></div>
-                  <div className="flex gap-1 justify-between items-center">
-                    <p className="text-xs text-gray-500 truncate">
-                      {conv.lastMessage
-                        ? conv.lastMessage.content
-                        : "No messages yet"}
-                    </p>
-                    <div className=" text-gray-400">
-                      {conv.lastMessage &&
-                        getStatusIcon(conv.lastMessage.status)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+              conversation={conv.conversation}
+              otherParticipants={conv.otherParticipants}
+              lastMessage={conv.lastMessage}
+              isSelected={conv.conversation.id === chatBoxState.conversationId}
+              onClick={onSelectConversation}
+              isHaveNewMessage={isHaveNewMessage}
+            />
           );
         })}
       </div>

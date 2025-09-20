@@ -2,14 +2,11 @@ import {
   createInitMsg,
   IMsgEntity,
   markMsgAsDelivered,
-  markMsgAsRead,
   markMsgAsSent,
   TMsgDirection,
 } from "@/core/domain/msg/entity";
 import { IMsgRepo } from "@/core/domain/msg/repo";
-import { genUUID } from "@/infratructure/indexDB/helper";
 import { IEventBus } from "../eventbus";
-import { ICommunicationManager } from "../services-facade";
 
 /////////////////////
 
@@ -49,7 +46,7 @@ export async function createMsg(
   eventBus: IEventBus,
   msg: Parameters<typeof createInitMsg>[0]
 ) {
-  const initNewMsg = createInitMsg(genUUID(msg));
+  const initNewMsg = createInitMsg(msg);
   const newMsg = await msgRepo.save(initNewMsg);
   newMsg &&
     eventBus.publish({
@@ -80,20 +77,6 @@ export async function setMsgDelivered(
   msg: IMsgEntity
 ) {
   const updated = markMsgAsDelivered(msg);
-  await msgRepo.update(updated);
-  eventBus.publish({
-    type: "MsgUpdated",
-    payload: updated,
-  });
-  return updated;
-}
-
-export async function setMsgRead(
-  msgRepo: IMsgRepo,
-  eventBus: IEventBus,
-  msg: IMsgEntity
-) {
-  const updated = markMsgAsRead(msg);
   await msgRepo.update(updated);
   eventBus.publish({
     type: "MsgUpdated",

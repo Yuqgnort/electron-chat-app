@@ -12,13 +12,16 @@ export const GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID =
 
 export function useGetConvWithParticipantsByUserId(
   service: TBootstrapReturn["service"],
-  userId: string
+  userId?: string,
+  enabled: boolean = true
 ) {
   return useQuery({
     queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, userId],
     queryFn: async () =>
-      await service.conv.getConvsWithParticipantsByUserId(userId),
-    enabled: !!userId,
+      await service.conv.getConvsWithParticipantsByUserId(userId!),
+    enabled: !!userId && enabled,
+    gcTime: 0,
+    staleTime: 0,
   });
 }
 

@@ -19,10 +19,6 @@ export type TIntegrationReceivedEvent =
       payload: { serverId: string; status: EMsgStatus.DELIVERED };
     }
   | {
-      type: "msg:read";
-      payload: { serverId: string; status: EMsgStatus.READ };
-    }
-  | {
       type: "msg:incoming";
       payload: {
         serverId: string;

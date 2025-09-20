@@ -5,7 +5,7 @@ import { App } from "./App";
 import { AppProvider } from "./context";
 import "./index.css";
 
-bootstrap().then(({ eventBus, service, socket }) => {
+bootstrap().then(({ db, eventBus, service, socket, repos }) => {
   const root = createRoot(document.body);
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -17,7 +17,13 @@ bootstrap().then(({ eventBus, service, socket }) => {
     },
   });
   root.render(
-    <AppProvider {...{ eventBus, service, socket }}>
+    <AppProvider
+      db={db}
+      eventBus={eventBus}
+      service={service}
+      socket={socket}
+      repos={repos}
+    >
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>

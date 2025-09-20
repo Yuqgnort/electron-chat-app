@@ -1,16 +1,20 @@
 import { IConvPartRepo } from "../domain/conv-part/repo";
-import { IConvEntity } from "../domain/conv/entity";
 import { IConvRepo } from "../domain/conv/repo";
 import { IMsgEntity, TMsgDirection } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
+import { IPendingMsgRepo } from "../domain/pending-msg/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
 import { TIntegrationSentEvent } from "./event";
 import { IEventBus } from "./eventbus";
-import { createConvWithParticipants, sendMsg } from "./services";
-import { createConvPart } from "./usecase/conv-part.uc";
-import { createConv } from "./usecase/conv.uc";
-import { createMsg, getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
+import {
+  createConvWithParticipants,
+  getConvsWithParticipantsByUserId,
+  sendMsg,
+} from "./services";
+import { getConvByUserIds } from "./usecase/conv.uc";
+import { getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
+import { getAllPendingMsgs } from "./usecase/pending-msg.uc";
 import { getAllUsers, getUserById } from "./usecase/user.uc";
 
 type ExtractPayload<
@@ -26,7 +30,8 @@ export type TTransactionTable =
   | "conversations"
   | "conversationParts"
   | "messages"
-  | "users";
+  | "users"
+  | "pendingMessages";
 
 export interface ITransactionManager {
   executeInTransaction<T>(
@@ -46,6 +51,7 @@ export function createAppService(
     convRepo: IConvRepo;
     userRepo: IUserRepo;
     convPartRepo: IConvPartRepo;
+    pendingMsgRepo: IPendingMsgRepo;
   },
   eventBus: IEventBus,
   transactionManager: ITransactionManager,
@@ -53,97 +59,19 @@ export function createAppService(
 ) {
   return {
     conv: {
-      createConv: async (
-        conv: Parameters<typeof createConv>[2],
-        userIds: string[]
-      ) => {
-        await transactionManager.executeInTransaction(
-          ["conversations", "conversationParts"],
-          async () => {
-            const newConv = await createConv(
-              repos.convRepo,
-              eventBus,
-              conv,
-              userIds
-            );
-            newConv &&
-              (await Promise.all(
-                userIds.map((userId) =>
-                  createConvPart(repos.convPartRepo, eventBus, {
-                    conversationId: newConv.id,
-                    userId,
-                  })
-                )
-              ));
-            return newConv;
-          }
-        );
-      },
-      getConvsWithParticipantsByUserId: async (
-        userId: IUserEntity["id"]
-      ): Promise<
-        Array<{
-          conversation: IConvEntity;
-          otherParticipants: IUserEntity[];
-          lastMessage?: IMsgEntity | null;
-        }>
-      > => {
-        const userConvParts =
-          (await repos.convPartRepo.getConvPartsByUserId(userId)) || [];
-
-        const convIds = userConvParts.map((cp) => cp.conversationId);
-        if (convIds.length === 0) return [];
-        const conversations = await Promise.all(
-          convIds.map((convId) => repos.convRepo.getConvById(convId))
-        );
-        const validConversations = conversations.filter(
-          (conv): conv is IConvEntity => conv !== null
-        );
-        const conversationsWithParticipants = await Promise.all(
-          validConversations.map(async (conv) => {
-            const convParts =
-              (await repos.convPartRepo.getConvPartsByConvId(conv.id)) || [];
-
-            const otherConvParts = convParts.filter(
-              (convPart) => convPart.userId !== userId
-            );
-
-            const otherParticipants = await Promise.all(
-              otherConvParts.map(async (convPart) => {
-                const user = await repos.userRepo.getById(convPart.userId);
-                return user;
-              })
-            );
-
-            const validOtherParticipants = otherParticipants.filter(
-              (user): user is IUserEntity => user !== null
-            );
-
-            const lastMessage = conv.lastMessageId
-              ? await repos.msgRepo.getById(conv.lastMessageId)
-              : null;
-
-            return {
-              conversation: conv,
-              otherParticipants: validOtherParticipants,
-              lastMessage,
-            };
-          })
-        ).then((res) =>
-          res.sort(
-            (a, b) => b.conversation.updatedAt - a.conversation.updatedAt
-          )
-        );
-        return conversationsWithParticipants;
-      },
+      getConvsWithParticipantsByUserId: async (userId: IUserEntity["id"]) =>
+        await getConvsWithParticipantsByUserId(
+          repos.msgRepo,
+          repos.convRepo,
+          repos.userRepo,
+          repos.convPartRepo,
+          userId
+        ),
       createConvWithParticipants: async (
-        conv: Omit<
-          IConvEntity,
-          "id" | "createdAt" | "updatedAt" | "lastMessageId" | "key"
-        >,
+        conv: Parameters<typeof createConvWithParticipants>[0],
         userIds: string[]
       ) =>
-        createConvWithParticipants(
+        await createConvWithParticipants(
           conv,
           userIds,
           repos.convRepo,
@@ -151,32 +79,43 @@ export function createAppService(
           eventBus,
           transactionManager
         ),
-      getConvByUserIds: async (userIds: IUserEntity["id"][]) =>
-        await repos.convRepo.getConvByUserIds(userIds),
+      getConvByUserIds: async (
+        userIds: Parameters<typeof getConvByUserIds>[1]
+      ) => await getConvByUserIds(repos.convRepo, userIds),
     },
     msg: {
-      sendMessage: (payload: Parameters<typeof sendMsg>[3]) =>
-        sendMsg(repos.msgRepo, eventBus, communicationManager, payload),
+      sendMessage: async (payload: Parameters<typeof sendMsg>[5]) =>
+        await sendMsg(
+          repos.msgRepo,
+          repos.pendingMsgRepo,
+          eventBus,
+          communicationManager,
+          transactionManager,
+          payload
+        ),
       getMsgsByConvId: async (
         conversationId: IMsgEntity["conversationId"],
         limit = 20,
         direction: TMsgDirection,
         cursor: number | null
       ) =>
-        getMsgsByConvId(
+        await getMsgsByConvId(
           repos.msgRepo,
           conversationId,
           limit,
           direction,
           cursor
         ),
-      getAllMsgs: async () => getAllMsgs(repos.msgRepo),
+      getAllMsgs: async () => await getAllMsgs(repos.msgRepo),
+      getAllPendingMsgs: async () =>
+        await getAllPendingMsgs(repos.pendingMsgRepo),
     },
     user: {
-      getAllUsers: () => getAllUsers(repos.userRepo),
-      getUserById: (id: IUserEntity["id"]) => getUserById(repos.userRepo, id),
-      getAllUsersIgnore: async (userId: IUserEntity["id"][]) =>
-        getAllUsers(repos.userRepo, userId),
+      getAllUsers: async () => await getAllUsers(repos.userRepo),
+      getUserById: async (id: Parameters<typeof getUserById>[1]) =>
+        await getUserById(repos.userRepo, id),
+      getAllUsersIgnore: async (userId: Parameters<typeof getAllUsers>[1]) =>
+        await getAllUsers(repos.userRepo, userId),
     },
   };
 }

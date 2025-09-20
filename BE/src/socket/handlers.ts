@@ -12,6 +12,10 @@ import {
   getUserSocketIds,
   isUserOnline,
   removeUserSocket,
+  addTypingUser,
+  removeTypingUser,
+  getTypingUsers,
+  getAllOnlineUsers,
 } from "./state";
 import { findSender, notifySender } from "./utils";
 
@@ -22,16 +26,33 @@ export function setupSocketHandlers(io: Server) {
     socket.on(ChatEvent.MESSAGE_SEND, handleMessageSend(socket, io));
     socket.on(ChatEvent.MESSAGE_DELIVERED, handleMessageDelivered(io));
     socket.on(ChatEvent.MESSAGE_READ, handleMessageRead(io));
-    socket.on("disconnect", handleDisconnect(socket));
+    socket.on(ChatEvent.TYPING_START, handleTypingStart(socket, io));
+    socket.on(ChatEvent.TYPING_STOP, handleTypingStop(socket, io));
+    socket.on(
+      ChatEvent.ONLINE_STATUS_REQUEST,
+      handleOnlineStatusRequest(socket, io)
+    );
+    socket.on("disconnect", handleDisconnect(socket, io));
   });
 }
 
 function handleRegister(socket: AuthSocket, io: Server) {
   return ({ userId }: EventPayloads[ChatEvent.REGISTER]) => {
+    const wasOffline = !isUserOnline(userId);
+
     addUserSocket(userId, socket.id);
     socket.userId = userId;
-    console.log(`User ${userId} online`);
+
+    // Join user to their own room for easier targeting
+    socket.join(userId);
+
+    // If user was offline and now comes online, notify others
+    if (wasOffline) {
+      socket.broadcast.emit(ChatEvent.USER_ONLINE, { userId });
+    }
+
     const pending = getPendingMessages(userId);
+
     if (pending.length > 0) {
       pending.forEach((msg) => {
         io.to(socket.id).emit(ChatEvent.MESSAGE_INCOMING, msg);
@@ -52,7 +73,6 @@ function handleMessageSend(socket: AuthSocket, io: Server) {
       return;
     }
 
-    // Store serverId to senderId mapping for tracking
     addServerIdMapping(serverId, fromUser);
 
     socket.emit(ChatEvent.MESSAGE_ACK, {
@@ -95,12 +115,67 @@ function handleMessageRead(io: Server) {
   };
 }
 
-function handleDisconnect(socket: AuthSocket) {
+function handleDisconnect(socket: AuthSocket, io: Server) {
   return () => {
     const userId = socket.userId;
     if (userId) {
       removeUserSocket(userId, socket.id);
       console.log(`🔌 User ${userId} disconnected from socket ${socket.id}`);
+
+      // Notify other users that this user went offline
+      socket.broadcast.emit(ChatEvent.USER_OFFLINE, { userId });
+
+      // Remove typing status for all conversations when user disconnects
+      // This would require additional state tracking to know which conversations the user was typing in
     }
+  };
+}
+
+function handleTypingStart(socket: AuthSocket, io: Server) {
+  return ({
+    userId,
+    conversationId,
+  }: EventPayloads[ChatEvent.TYPING_START]) => {
+    if (!socket.userId || socket.userId !== userId) {
+      console.error("Unauthorized typing start request");
+      return;
+    }
+
+    addTypingUser(conversationId, userId, socket.id);
+
+    // Notify other participants in the conversation
+    socket.to(conversationId).emit(ChatEvent.TYPING_INDICATOR, {
+      userId,
+      conversationId,
+      isTyping: true,
+    });
+  };
+}
+
+function handleTypingStop(socket: AuthSocket, io: Server) {
+  return ({ userId, conversationId }: EventPayloads[ChatEvent.TYPING_STOP]) => {
+    if (!socket.userId || socket.userId !== userId) {
+      console.error("Unauthorized typing stop request");
+      return;
+    }
+
+    removeTypingUser(conversationId, userId);
+
+    // Notify other participants in the conversation
+    socket.to(conversationId).emit(ChatEvent.TYPING_INDICATOR, {
+      userId,
+      conversationId,
+      isTyping: false,
+    });
+  };
+}
+
+function handleOnlineStatusRequest(socket: AuthSocket, io: Server) {
+  return ({ userIds }: EventPayloads[ChatEvent.ONLINE_STATUS_REQUEST]) => {
+    const onlineUsers = userIds.filter((userId) => isUserOnline(userId));
+
+    socket.emit(ChatEvent.ONLINE_STATUS_RESPONSE, {
+      onlineUsers,
+    });
   };
 }

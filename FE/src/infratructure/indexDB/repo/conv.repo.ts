@@ -11,8 +11,13 @@ export const createConvRepoIdb = (db: ChatDb): IConvRepo => {
       return (await db.conversations.get(id)) || null;
     },
     async getConvById(id) {
-      const conv = await db.conversations.get(id);
-      return conv ?? null;
+      try {
+        const conv = await db.conversations.get(id);
+        return conv ?? null;
+      } catch (error) {
+        console.error(`Failed to fetch conversation by ID: ${id}`, error);
+        return null;
+      }
     },
     async getConvByUserIds(userIds) {
       if (userIds.length !== 2) {

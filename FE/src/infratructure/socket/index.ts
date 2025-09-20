@@ -45,7 +45,9 @@ export function createSocketClient(
         transports: ["websocket"],
         reconnection: true,
       });
-      socket.on("connect", () => {});
+      socket.on("connect", () => {
+        eventBus.publish({ type: "connect", payload: null });
+      });
       socket.on("disconnect", (rp) => {});
       socket.on("msg:ack", (rp) => {
         eventBus.publish({
@@ -54,12 +56,7 @@ export function createSocketClient(
         });
       });
       socket.on("msg:delivered", (rp) => {
-        console.log("Received msg:delivered event from socket:", rp);
-
         eventBus.publish({ type: "msg:delivered", payload: rp });
-      });
-      socket.on("msg:read", (rp) => {
-        eventBus.publish({ type: "msg:read", payload: rp });
       });
       socket.on("msg:incoming", (rp) => {
         eventBus.publish({ type: "msg:incoming", payload: rp });

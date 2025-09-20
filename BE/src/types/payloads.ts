@@ -34,4 +34,36 @@ export interface EventPayloads {
   [ChatEvent.MESSAGE_READ]: {
     serverId: string;
   };
+
+  [ChatEvent.TYPING_START]: {
+    userId: string;
+    conversationId: string;
+  };
+
+  [ChatEvent.TYPING_STOP]: {
+    userId: string;
+    conversationId: string;
+  };
+
+  [ChatEvent.TYPING_INDICATOR]: {
+    userId: string;
+    conversationId: string;
+    isTyping: boolean;
+  };
+
+  [ChatEvent.USER_ONLINE]: {
+    userId: string;
+  };
+
+  [ChatEvent.USER_OFFLINE]: {
+    userId: string;
+  };
+
+  [ChatEvent.ONLINE_STATUS_REQUEST]: {
+    userIds: string[];
+  };
+
+  [ChatEvent.ONLINE_STATUS_RESPONSE]: {
+    onlineUsers: string[];
+  };
 }

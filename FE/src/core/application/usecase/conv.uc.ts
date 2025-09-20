@@ -5,7 +5,6 @@ import {
 } from "@/core/domain/conv/entity";
 import { IConvRepo } from "@/core/domain/conv/repo";
 import { IUserEntity } from "@/core/domain/user/entity";
-import { genUUID } from "@/infratructure/indexDB/helper";
 import { IEventBus } from "../eventbus";
 
 //////////////////////
@@ -32,12 +31,10 @@ export async function createConv(
   conv: Parameters<typeof createInitConv>[0],
   userIds: IUserEntity["id"][]
 ) {
-  const initNewConv = createInitConv(
-    genUUID({
-      ...conv,
-      key: userIds.sort().join(":"),
-    })
-  );
+  const initNewConv = createInitConv({
+    ...conv,
+    key: userIds.sort().join(":"),
+  });
   const newConv = await convRepo.createConv(initNewConv);
   newConv &&
     eventBus.publish({

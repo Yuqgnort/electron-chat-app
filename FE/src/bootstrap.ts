@@ -1,20 +1,21 @@
 import { createInMemoryEventBus } from "./core/application/eventbus";
-import { EUserGender, IUserEntity } from "./core/domain/user/entity";
-import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
-import { ChatDb, initDb } from "./infratructure/indexDB/init";
-import { createConvRepoIdb } from "./infratructure/indexDB/repo/conv.repo";
-import { createConvPartRepoIdb } from "./infratructure/indexDB/repo/conv-part.repo";
-import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
-import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
-import { createSocketClient } from "./infratructure/socket";
-import { createAppService } from "./core/application/services-facade";
 import {
+  retrySendingPendingMessagesHandler,
   updateLastMsgHandler,
   updateMsgAckHandler,
   updateMsgDeliveredHandler,
   updateMsgIncomingHandler,
-  updateMsgReadHandler,
 } from "./core/application/handler/msg.hdl";
+import { createAppService } from "./core/application/services-facade";
+import { EUserGender, IUserEntity } from "./core/domain/user/entity";
+import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
+import { ChatDb, initDb } from "./infratructure/indexDB/init";
+import { createConvPartRepoIdb } from "./infratructure/indexDB/repo/conv-part.repo";
+import { createConvRepoIdb } from "./infratructure/indexDB/repo/conv.repo";
+import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
+import { createPendingMsgRepoIdb } from "./infratructure/indexDB/repo/pending-msg.repo";
+import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
+import { createSocketClient } from "./infratructure/socket";
 
 /////////////////////////
 
@@ -74,6 +75,7 @@ export async function bootstrap() {
   const userRepo = createUserRepoIdb(db);
   const convRepo = createConvRepoIdb(db);
   const convPartRepo = createConvPartRepoIdb(db);
+  const pendingMsgRepo = createPendingMsgRepoIdb(db);
 
   await handleSeedUsers(db, userRepo);
 
@@ -90,7 +92,6 @@ export async function bootstrap() {
   updateLastMsgHandler(eventBus, convRepo);
   updateMsgAckHandler(eventBus, msgRepo);
   updateMsgDeliveredHandler(eventBus, msgRepo);
-  updateMsgReadHandler(eventBus, msgRepo);
   updateMsgIncomingHandler(
     eventBus,
     msgRepo,
@@ -99,6 +100,7 @@ export async function bootstrap() {
     transactionManager,
     socket
   );
+  retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
 
   // 5. Create App Service
 
@@ -108,6 +110,7 @@ export async function bootstrap() {
       convPartRepo,
       msgRepo,
       userRepo,
+      pendingMsgRepo,
     },
     eventBus,
     transactionManager,
@@ -118,8 +121,16 @@ export async function bootstrap() {
 
   return {
     service,
-    eventBus,
     socket,
+    eventBus,
+    db,
+    repos: {
+      msgRepo,
+      userRepo,
+      convRepo,
+      convPartRepo,
+      pendingMsgRepo,
+    },
   };
 }
 

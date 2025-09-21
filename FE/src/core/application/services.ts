@@ -74,45 +74,49 @@ export const sendMsg = async (
   transactionManager: ITransactionManager,
   msg: Parameters<typeof createInitMsg>[0]
 ) => {
-  await transactionManager
-    .executeInTransaction(
-      [
-        "messages",
-        "pendingMessages",
-        "conversations",
-        "conversationParts",
-        "users",
-      ],
-      async () => {
-        const newMsg = await createMsg(msgRepo, msg);
-        eventBus.publishAsync({
-          type: "MsgCreated",
-          payload: newMsg,
-        });
-        if (newMsg) {
-          await addPendingMsg(pendingMsgRepo, {
-            content: msg.content,
-            senderId: msg.senderId,
-            receiverId: msg.receiverId,
-            conversationId: msg.conversationId,
-            localId: newMsg.localId!,
-          });
-          return newMsg;
-        }
-      }
-    )
-    .then(async (newMsg) => {
-      if (newMsg && newMsg.localId) {
-        await communicationManager.sendMessage({
-          localId: newMsg.localId,
-          conversationId: newMsg.conversationId,
-          senderId: newMsg.senderId,
-          receiverId: newMsg.receiverId,
-          content: newMsg.content,
-          createdAt: newMsg.createdAt,
-        });
-      }
+  const result = await transactionManager.executeInTransaction(
+    [
+      "messages",
+      "pendingMessages",
+      "conversations",
+      "conversationParts",
+      "users",
+    ],
+    async () => {
+      const newMsg = await createMsg(msgRepo, msg);
+      if (!newMsg) throw new Error("Failed to create message");
+      const pendingMsg = await addPendingMsg(pendingMsgRepo, {
+        content: msg.content,
+        senderId: msg.senderId,
+        receiverId: msg.receiverId,
+        conversationId: msg.conversationId,
+        localId: newMsg.localId!,
+      });
+      if (!pendingMsg) throw new Error("Failed to create pending message");
+      return { newMsg, pendingMsg };
+    }
+  );
+
+  if (!result) return;
+
+  const { newMsg, pendingMsg } = result;
+
+  await eventBus.publishAsync({ type: "MsgCreated", payload: newMsg });
+  await eventBus.publishAsync({
+    type: "PendingMsgCreated",
+    payload: pendingMsg,
+  });
+
+  if (newMsg.localId) {
+    await communicationManager.sendMessage({
+      localId: newMsg.localId,
+      conversationId: newMsg.conversationId,
+      senderId: newMsg.senderId,
+      receiverId: newMsg.receiverId,
+      content: newMsg.content,
+      createdAt: newMsg.createdAt,
     });
+  }
 };
 
 export const getConvsWithParticipantsByUserId = async (

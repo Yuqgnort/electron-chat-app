@@ -18,6 +18,7 @@ export type TEventMap = {
 export interface IEventBus {
   publish<E extends TEvent>(event: E): void;
   publishAsync<E extends TEvent>(event: E): Promise<void>;
+
   subscribe<K extends keyof TEventMap>(
     type: K,
     handler: (event: TEventMap[K]) => void | Promise<void>
@@ -25,7 +26,6 @@ export interface IEventBus {
   cleanup(): void;
 }
 
-// Queue để xử lý events theo thứ tự
 interface EventQueueItem {
   event: TEvent;
   timestamp: number;
@@ -38,15 +38,12 @@ export function createInMemoryEventBus(): IEventBus {
   };
   const handlers: Handlers = {};
 
-  // Event processing queue và lock
   const eventQueue: EventQueueItem[] = [];
   let isProcessing = false;
   let eventCounter = 0;
 
-  // Debounce timers cho các events có thể spam
   const debounceTimers = new Map<string, NodeJS.Timeout>();
 
-  // Cleanup timeouts
   const timeouts = new Set<NodeJS.Timeout>();
 
   function listOf<K extends keyof TEventMap>(type: K) {
@@ -105,7 +102,8 @@ export function createInMemoryEventBus(): IEventBus {
 
   return {
     publish<E extends TEvent>(event: E) {
-      // Synchronous publish - add to queue và trigger processing
+      // Asynchronous publish - add to queue và trigger processing
+      // Non-blocking: caller doesn't wait for event processing
       const item: EventQueueItem = {
         event,
         timestamp: Date.now(),
@@ -126,7 +124,8 @@ export function createInMemoryEventBus(): IEventBus {
     },
 
     async publishAsync<E extends TEvent>(event: E) {
-      // Asynchronous publish - process immediately và wait
+      // Synchronous publish - process immediately và wait for completion
+      // Blocking: caller waits for all handlers to complete
       await processEvent(event);
     },
 

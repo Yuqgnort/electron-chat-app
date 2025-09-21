@@ -196,7 +196,7 @@ export const updateMsgIncomingHandler = (
               "Failed to create conversation for incoming message"
             );
             conv = result.conv;
-            eventBus.publishAsync({ type: "ConvCreated", payload: conv });
+            await eventBus.publishAsync({ type: "ConvCreated", payload: conv });
           }
 
           const initNewMsg = createInitMsg({
@@ -212,12 +212,12 @@ export const updateMsgIncomingHandler = (
             await createMsg(msgRepo, initNewMsg),
             "Failed to create incoming message"
           );
-          eventBus.publishAsync({ type: "MsgCreated", payload: newMsg });
+          await eventBus.publishAsync({ type: "MsgCreated", payload: newMsg });
           const updatedConv = assertExists(
             await updateConvLastMessageId(convRepo, conv, newMsg.id),
             `Failed to update last message for conversation ${conv.id}`
           );
-          eventBus.publishAsync({
+          await eventBus.publishAsync({
             type: "ConvLastMessageChanged",
             payload: updatedConv,
           });

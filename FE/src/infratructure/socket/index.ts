@@ -46,7 +46,7 @@ export function createSocketClient(
         reconnection: true,
       });
       socket.on("connect", () => {
-        eventBus.publishAsync({ type: "connect", payload: null });
+        eventBus.publish({ type: "connect", payload: null });
       });
       socket.on("disconnect", (rp) => {});
       socket.on("msg:ack", (rp) => {

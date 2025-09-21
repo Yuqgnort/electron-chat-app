@@ -64,6 +64,39 @@ export interface EventPayloads {
   };
 
   [ChatEvent.ONLINE_STATUS_RESPONSE]: {
-    onlineUsers: string[];
+    onlineUsers:
+      | string[]
+      | {
+          userId: string;
+          status: "online" | "offline";
+          lastSeen: number;
+        }[];
+  };
+
+  // New payload types for enhanced user status
+  [ChatEvent.GET_ALL_ONLINE_USERS]: {};
+
+  [ChatEvent.ALL_ONLINE_USERS_RESPONSE]: {
+    onlineUsers: {
+      userId: string;
+      status: "online" | "offline";
+      lastSeen: number;
+    }[];
+  };
+
+  [ChatEvent.USER_STATUS_CHANGE]: {
+    userId: string;
+    status: "online" | "offline";
+    lastSeen: number;
+  };
+
+  [ChatEvent.HEARTBEAT]: {
+    userId: string;
+    timestamp: number;
+  };
+
+  [ChatEvent.USER_LAST_SEEN_UPDATE]: {
+    userId: string;
+    lastSeen: number;
   };
 }

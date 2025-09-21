@@ -5,57 +5,58 @@ import {
 } from "@/core/domain/conv/entity";
 import { IConvRepo } from "@/core/domain/conv/repo";
 import { IUserEntity } from "@/core/domain/user/entity";
-import { IEventBus } from "../eventbus";
+import { assertExists, withErrorHandling } from "../error";
 
 //////////////////////
 
-export async function getConvById(
-  convRepo: IConvRepo,
-  id: IConvEntity["id"]
-): Promise<IConvEntity | null> {
-  return convRepo.getConvById(id);
-}
+export const getConvById = withErrorHandling(
+  (convRepo: IConvRepo, id: IConvEntity["id"]): Promise<IConvEntity | null> => {
+    return convRepo.getConvById(id);
+  },
+  "getConvById"
+);
 
-export async function getConvByUserIds(
-  convRepo: IConvRepo,
-  userIds: IUserEntity["id"][]
-): Promise<IConvEntity | null> {
-  return convRepo.getConvByUserIds(userIds);
-}
+export const getConvByUserIds = withErrorHandling(
+  (
+    convRepo: IConvRepo,
+    userIds: IUserEntity["id"][]
+  ): Promise<IConvEntity | null> => {
+    return convRepo.getConvByUserIds(userIds);
+  },
+  "getConvByUserIds"
+);
 
-//////////////////////
+///////////////////////
 
-export async function createConv(
-  convRepo: IConvRepo,
-  eventBus: IEventBus,
-  conv: Parameters<typeof createInitConv>[0],
-  userIds: IUserEntity["id"][]
-) {
-  const initNewConv = createInitConv({
-    ...conv,
-    key: userIds.sort().join(":"),
-  });
-  const newConv = await convRepo.createConv(initNewConv);
-  newConv &&
-    eventBus.publish({
-      type: "ConvCreated",
-      payload: newConv,
+export const createConv = withErrorHandling(
+  async (
+    convRepo: IConvRepo,
+    conv: Parameters<typeof createInitConv>[0],
+    userIds: IUserEntity["id"][]
+  ) => {
+    const initNewConv = createInitConv({
+      ...conv,
+      key: userIds.sort().join(":"),
     });
-  return newConv;
-}
+    const newConv = assertExists(
+      await convRepo.createConv(initNewConv),
+      "Failed to create conversation"
+    );
+    return newConv;
+  },
+  "createConv"
+);
 
-export async function updateConvLastMessageId(
-  convRepo: IConvRepo,
-  eventBus: IEventBus,
-  conv: IConvEntity,
-  msgId: IConvEntity["lastMessageId"]
-) {
-  if (!conv || !msgId) return null;
-  const updated = updateLastMessageId(conv, msgId);
-  await convRepo.updateConv(updated);
-  eventBus.publish({
-    type: "ConvLastMessageChanged",
-    payload: updated,
-  });
-  return updated;
-}
+export const updateConvLastMessageId = withErrorHandling(
+  async (
+    convRepo: IConvRepo,
+    conv: IConvEntity,
+    msgId: IConvEntity["lastMessageId"]
+  ) => {
+    if (!conv || !msgId) return null;
+    const updated = updateLastMessageId(conv, msgId);
+    await convRepo.updateConv(updated);
+    return updated;
+  },
+  "updateConvLastMessageId"
+);

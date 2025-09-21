@@ -5,6 +5,10 @@ import {
   getServerIdSender,
   getTypingUsers,
   cleanupExpiredTyping,
+  getAllUserStatuses,
+  getOnlineUsersWithDetails,
+  cleanupOfflineUsers,
+  updateUserHeartbeat,
 } from "./state";
 import { ChatEvent } from "../types/events";
 
@@ -99,4 +103,52 @@ export function notifyConversationParticipants(
       io.to(socketId).emit(event, data);
     });
   });
+}
+
+// User Status Utilities
+export function broadcastUserStatusChange(
+  io: Server,
+  userId: string,
+  status: "online" | "offline",
+  excludeSocketId?: string
+) {
+  const event =
+    status === "online" ? ChatEvent.USER_ONLINE : ChatEvent.USER_OFFLINE;
+  const payload = { userId };
+
+  if (excludeSocketId) {
+    io.except(excludeSocketId).emit(event, payload);
+  } else {
+    io.emit(event, payload);
+  }
+}
+
+export function sendOnlineUsersList(io: Server, socketId: string) {
+  const onlineUsers = getOnlineUsersWithDetails();
+  io.to(socketId).emit(ChatEvent.ONLINE_STATUS_RESPONSE, {
+    onlineUsers: onlineUsers.map((user) => ({
+      userId: user.userId,
+      status: user.status,
+      lastSeen: user.lastSeen,
+    })),
+  });
+}
+
+export function sendUserStatusToAll(
+  io: Server,
+  userId: string,
+  status: "online" | "offline"
+) {
+  broadcastUserStatusChange(io, userId, status);
+}
+
+export function handleUserHeartbeat(userId: string) {
+  updateUserHeartbeat(userId);
+}
+
+export function startUserStatusCleanup(io: Server) {
+  // Clean up offline users every 30 seconds
+  setInterval(() => {
+    cleanupOfflineUsers();
+  }, 30000);
 }

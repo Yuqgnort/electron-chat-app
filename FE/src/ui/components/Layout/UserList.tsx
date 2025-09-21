@@ -4,6 +4,7 @@ import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetConvByUserIds } from "@/ui/hooks/tanstack/conv";
 import { useGetUsersWithIgnoreIds } from "@/ui/hooks/tanstack/user";
+import { motion } from "framer-motion";
 
 export function UserList() {
   const { service } = useAppContext();
@@ -52,6 +53,12 @@ export function UserList() {
                     {user.displayName.charAt(0).toUpperCase()}
                   </span>
                 </div>
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"
+                />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">

@@ -3,6 +3,8 @@ import { IConvRepo } from "@/core/domain/conv/repo";
 import { createInitMsg, EMsgStatus } from "@/core/domain/msg/entity";
 import { IMsgRepo } from "@/core/domain/msg/repo";
 import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
+import { IPendingMsgEntity } from "@/core/domain/pending-msg/entity";
+import { assertExists, withErrorHandling } from "../error";
 import { IEventBus } from "../eventbus";
 import { createConvWithParticipants } from "../services";
 import { ICommunicationManager, ITransactionManager } from "../services-facade";
@@ -10,50 +12,156 @@ import { updateConvLastMessageId } from "../usecase/conv.uc";
 import { createMsg, setMsgDelivered, setMsgSent } from "../usecase/msg.uc";
 import { getAllPendingMsgs, removePendingMsg } from "../usecase/pending-msg.uc";
 
+class MessageProcessingManager {
+  private locks = new Map<string, Promise<void>>();
+  private debounceTimers = new Map<string, NodeJS.Timeout>();
+
+  async withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const currentLock = this.locks.get(key);
+    if (currentLock) {
+      await currentLock;
+    }
+
+    let resolve: () => void;
+    const newLock = new Promise<void>((res) => {
+      resolve = res;
+    });
+    this.locks.set(key, newLock);
+
+    try {
+      return await fn();
+    } finally {
+      this.locks.delete(key);
+      resolve!();
+    }
+  }
+
+  withUserPairLock<T>(userId1: string, userId2: string, fn: () => Promise<T>) {
+    const key = [userId1, userId2].sort().join(":");
+    return this.withLock(key, fn);
+  }
+
+  withConversationLock<T>(conversationId: string, fn: () => Promise<T>) {
+    return this.withLock(`conv:${conversationId}`, fn);
+  }
+
+  withMessageLock<T>(messageId: string, fn: () => Promise<T>) {
+    return this.withLock(`msg:${messageId}`, fn);
+  }
+
+  withServerIdLock<T>(serverId: string, fn: () => Promise<T>) {
+    return this.withLock(`server:${serverId}`, fn);
+  }
+
+  withLocalIdLock<T>(localId: string, fn: () => Promise<T>) {
+    return this.withLock(`local:${localId}`, fn);
+  }
+
+  async withDebounce<T>(
+    key: string,
+    delay: number,
+    fn: () => Promise<T>
+  ): Promise<T | null> {
+    const existingTimer = this.debounceTimers.get(key);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(async () => {
+        this.debounceTimers.delete(key);
+        try {
+          resolve(await fn());
+        } catch (error) {
+          console.error(`Debounced operation failed for key ${key}:`, error);
+          resolve(null);
+        }
+      }, delay);
+
+      this.debounceTimers.set(key, timer);
+    });
+  }
+
+  cleanup(): void {
+    for (const timer of this.debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.debounceTimers.clear();
+    this.locks.clear();
+  }
+}
+
+const messageProcessingManager = new MessageProcessingManager();
+
 export const updateLastMsgHandler = (
   eventBus: IEventBus,
   convRepo: IConvRepo
 ) => {
-  eventBus.subscribe("MsgCreated", async ({ payload }) => {
-    try {
-      const conv = await convRepo.getConvById(payload.conversationId);
-      if (!conv)
-        throw new Error(
-          `Conversation with id ${payload.conversationId} not found for last message update`
-        );
-      await updateConvLastMessageId(convRepo, eventBus, conv, payload.id);
-    } catch (error) {
-      console.error("Failed to update last message in conversation:", error);
-    }
-  });
+  eventBus.subscribe(
+    "MsgCreated",
+    withErrorHandling(async ({ payload }) => {
+      await messageProcessingManager.withConversationLock(
+        payload.conversationId,
+        async () => {
+          const conv = assertExists(
+            await convRepo.getConvById(payload.conversationId),
+            `Conversation with id ${payload.conversationId} not found for last message update`
+          );
+          const updatedConv = assertExists(
+            await updateConvLastMessageId(convRepo, conv, payload.id),
+            `Failed to update last message for conversation ${conv.id}`
+          );
+          eventBus.publish({
+            type: "ConvLastMessageChanged",
+            payload: updatedConv,
+          });
+          return updatedConv;
+        }
+      );
+    }, "updateLastMsgHandler")
+  );
 };
 
 export const updateMsgAckHandler = (eventBus: IEventBus, msgRepo: IMsgRepo) => {
-  eventBus.subscribe("msg:ack", async ({ payload }) => {
-    const msgAck = await msgRepo.getByLocalId(payload.localId);
-    const msg = msgAck ? { ...msgAck, serverId: payload.serverId } : null;
-    if (!msg) {
-      throw new Error(
-        `Message with localId ${payload.localId} not found for ack update`
+  eventBus.subscribe(
+    "msg:ack",
+    withErrorHandling(async ({ payload }) => {
+      await messageProcessingManager.withLocalIdLock(
+        payload.localId,
+        async () => {
+          const msgAck = assertExists(
+            await msgRepo.getByLocalId(payload.localId),
+            `Message with localId ${payload.localId} not found for ack update`
+          );
+          const msg = { ...msgAck, serverId: payload.serverId };
+          const newMsg = await setMsgSent(msgRepo, msg);
+          eventBus.publish({ type: "MsgUpdated", payload: newMsg });
+          return newMsg;
+        }
       );
-    }
-    await setMsgSent(msgRepo, eventBus, msg);
-  });
+    }, "updateMsgAckHandler")
+  );
 };
 
 export const updateMsgDeliveredHandler = (
   eventBus: IEventBus,
   msgRepo: IMsgRepo
 ) => {
-  eventBus.subscribe("msg:delivered", async ({ payload }) => {
-    const msg = await msgRepo.getByServerId(payload.serverId);
-    if (!msg) {
-      throw new Error(
-        `Message with serverId ${payload.serverId} not found for delivery update`
+  eventBus.subscribe(
+    "msg:delivered",
+    withErrorHandling(async ({ payload }) => {
+      await messageProcessingManager.withServerIdLock(
+        payload.serverId,
+        async () => {
+          const msg = assertExists(
+            await msgRepo.getByServerId(payload.serverId),
+            `Message with serverId ${payload.serverId} not found for delivery update`
+          );
+          const newMsg = await setMsgDelivered(msgRepo, msg);
+          eventBus.publish({ type: "MsgUpdated", payload: newMsg });
+          return newMsg;
+        }
       );
-    }
-    await setMsgDelivered(msgRepo, eventBus, msg);
-  });
+    }, "updateMsgDeliveredHandler")
+  );
 };
 
 export const updateMsgIncomingHandler = (
@@ -64,58 +172,125 @@ export const updateMsgIncomingHandler = (
   transactionManager: ITransactionManager,
   communicationManager: ICommunicationManager
 ) => {
-  eventBus.subscribe("msg:incoming", async ({ payload }) => {
-    let conv = await convRepo.getConvByUserIds([
-      payload.senderId,
-      payload.receiverId,
-    ]);
+  eventBus.subscribe(
+    "msg:incoming",
+    withErrorHandling(async ({ payload }) => {
+      await messageProcessingManager.withUserPairLock(
+        payload.senderId,
+        payload.receiverId,
+        async () => {
+          let conv = await convRepo.getConvByUserIds([
+            payload.senderId,
+            payload.receiverId,
+          ]);
+          if (!conv) {
+            const result = assertExists(
+              await createConvWithParticipants(
+                { title: "New Conversation" },
+                [payload.senderId, payload.receiverId],
+                convRepo,
+                convPartRepo,
+                eventBus,
+                transactionManager
+              ),
+              "Failed to create conversation for incoming message"
+            );
+            conv = result.conv;
+            eventBus.publishAsync({ type: "ConvCreated", payload: conv });
+          }
 
-    if (!conv) {
-      conv = await createConvWithParticipants(
-        { title: "New Conversation" },
-        [payload.senderId, payload.receiverId],
-        convRepo,
-        convPartRepo,
-        eventBus,
-        transactionManager
+          const initNewMsg = createInitMsg({
+            content: payload.content,
+            conversationId: conv.id,
+            senderId: payload.senderId,
+            receiverId: payload.receiverId,
+            serverId: payload.serverId,
+            status: EMsgStatus.DELIVERED,
+          });
+
+          const newMsg = assertExists(
+            await createMsg(msgRepo, initNewMsg),
+            "Failed to create incoming message"
+          );
+          eventBus.publishAsync({ type: "MsgCreated", payload: newMsg });
+          const updatedConv = assertExists(
+            await updateConvLastMessageId(convRepo, conv, newMsg.id),
+            `Failed to update last message for conversation ${conv.id}`
+          );
+          eventBus.publishAsync({
+            type: "ConvLastMessageChanged",
+            payload: updatedConv,
+          });
+
+          if (newMsg.serverId) {
+            await communicationManager.deliverMessage({
+              serverId: newMsg.serverId,
+            });
+          }
+
+          return { newMsg, updatedConv };
+        }
       );
-      if (!conv) return;
-    }
-
-    const initNewMsg = createInitMsg({
-      content: payload.content,
-      conversationId: conv.id,
-      senderId: payload.senderId,
-      receiverId: payload.receiverId,
-      serverId: payload.serverId,
-      status: EMsgStatus.DELIVERED,
-    });
-
-    const newMsg = await createMsg(msgRepo, eventBus, initNewMsg);
-
-    if (newMsg) {
-      await updateConvLastMessageId(convRepo, eventBus, conv, newMsg.id);
-      if (newMsg.serverId) {
-        await communicationManager.deliverMessage({
-          serverId: newMsg.serverId,
-        });
-      }
-    }
-  });
+    }, "updateMsgIncomingHandler")
+  );
 };
 
-export const retrySendingPendingMessagesHandler = async (
+export const retrySendingPendingMessagesHandler = (
   pendingMsgRepo: IPendingMsgRepo,
   eventBus: IEventBus,
   communicationManager: ICommunicationManager
 ) => {
-  eventBus.subscribe("connect", async () => {
-    console.log("Socket connected, retrying pending messages...");
+  eventBus.subscribe(
+    "connect",
+    withErrorHandling(async () => {
+      await messageProcessingManager.withDebounce(
+        "retry-pending-messages",
+        1000,
+        async () => {
+          const pendingMsgs = await getAllPendingMsgs(pendingMsgRepo);
+          const errors: Error[] = [];
 
-    const pendingMsgs = await getAllPendingMsgs(pendingMsgRepo);
-    console.log("Retrying pending messages:", pendingMsgs);
+          for (const pendingMsg of pendingMsgs) {
+            const success = await retrySinglePendingMsg(
+              pendingMsgRepo,
+              communicationManager,
+              pendingMsg,
+              errors
+            );
+            if (success) {
+              eventBus.publish({
+                type: "PendingMsgRemoved",
+                payload: { localId: pendingMsg.localId },
+              });
+            }
+          }
 
-    for (const pendingMsg of pendingMsgs) {
+          if (errors.length > 0) {
+            throw new AggregateError(
+              errors,
+              `[RetryPendingMessages] ${errors.length} messages failed to resend`
+            );
+          }
+
+          return {
+            processedCount: pendingMsgs.length,
+            errorCount: errors.length,
+          };
+        }
+      );
+    }, "retrySendingPendingMessagesHandler")
+  );
+};
+
+async function retrySinglePendingMsg(
+  pendingMsgRepo: IPendingMsgRepo,
+  communicationManager: ICommunicationManager,
+  pendingMsg: IPendingMsgEntity,
+  errors: Error[]
+): Promise<boolean> {
+  return messageProcessingManager.withLocalIdLock(
+    pendingMsg.localId,
+    async () => {
       try {
         await communicationManager.sendMessage({
           content: pendingMsg.content,
@@ -125,13 +300,19 @@ export const retrySendingPendingMessagesHandler = async (
           receiverId: pendingMsg.receiverId,
           conversationId: pendingMsg.conversationId,
         });
-        await removePendingMsg(pendingMsgRepo, eventBus, pendingMsg.localId);
-      } catch (error) {
+
+        await removePendingMsg(pendingMsgRepo, pendingMsg.localId);
+        return true;
+      } catch (err) {
         console.error(
-          `Failed to retry sending pending message ${pendingMsg.localId}:`,
-          error
+          `[RetryPendingMessages] Failed to resend message ${pendingMsg.localId}:`,
+          err
         );
+        errors.push(err instanceof Error ? err : new Error(String(err)));
+        return false;
       }
     }
-  });
-};
+  );
+}
+
+export { messageProcessingManager };

@@ -5,12 +5,18 @@ import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
+import { withErrorHandling } from "./error";
 import { TIntegrationSentEvent } from "./event";
 import { IEventBus } from "./eventbus";
 import {
   createConvWithParticipants,
   getConvsWithParticipantsByUserId,
+  requestAllOnlineUsers,
+  requestUsersStatus,
+  sendHeartbeat,
   sendMsg,
+  startTyping,
+  stopTyping,
 } from "./services";
 import { getConvByUserIds } from "./usecase/conv.uc";
 import { getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
@@ -43,6 +49,11 @@ export interface ITransactionManager {
 export interface ICommunicationManager {
   sendMessage: MapEvent<"msg:send">;
   deliverMessage: MapEvent<"msg:delivered">;
+  requestAllOnlineUsers: MapEvent<"users:get_all_online">;
+  requestUsersStatus: MapEvent<"status:request">;
+  sendHeartbeat: MapEvent<"heartbeat">;
+  startTyping: MapEvent<"typing:start">;
+  stopTyping: MapEvent<"typing:stop">;
 }
 
 export function createAppService(
@@ -59,63 +70,115 @@ export function createAppService(
 ) {
   return {
     conv: {
-      getConvsWithParticipantsByUserId: async (userId: IUserEntity["id"]) =>
-        await getConvsWithParticipantsByUserId(
-          repos.msgRepo,
-          repos.convRepo,
-          repos.userRepo,
-          repos.convPartRepo,
-          userId
-        ),
-      createConvWithParticipants: async (
-        conv: Parameters<typeof createConvWithParticipants>[0],
-        userIds: string[]
-      ) =>
-        await createConvWithParticipants(
-          conv,
-          userIds,
-          repos.convRepo,
-          repos.convPartRepo,
-          eventBus,
-          transactionManager
-        ),
-      getConvByUserIds: async (
-        userIds: Parameters<typeof getConvByUserIds>[1]
-      ) => await getConvByUserIds(repos.convRepo, userIds),
+      getConvsWithParticipantsByUserId: withErrorHandling(
+        async (userId: IUserEntity["id"]) =>
+          await getConvsWithParticipantsByUserId(
+            repos.msgRepo,
+            repos.convRepo,
+            repos.userRepo,
+            repos.convPartRepo,
+            userId
+          ),
+        "getConvsWithParticipantsByUserId"
+      ),
+      createConvWithParticipants: withErrorHandling(
+        async (
+          conv: Parameters<typeof createConvWithParticipants>[0],
+          userIds: string[]
+        ) =>
+          await createConvWithParticipants(
+            conv,
+            userIds,
+            repos.convRepo,
+            repos.convPartRepo,
+            eventBus,
+            transactionManager
+          ),
+        "createConvWithParticipants"
+      ),
+      getConvByUserIds: withErrorHandling(
+        async (userIds: Parameters<typeof getConvByUserIds>[1]) =>
+          await getConvByUserIds(repos.convRepo, userIds),
+        "getConvByUserIds"
+      ),
     },
     msg: {
-      sendMessage: async (payload: Parameters<typeof sendMsg>[5]) =>
-        await sendMsg(
-          repos.msgRepo,
-          repos.pendingMsgRepo,
-          eventBus,
-          communicationManager,
-          transactionManager,
-          payload
-        ),
-      getMsgsByConvId: async (
-        conversationId: IMsgEntity["conversationId"],
-        limit = 20,
-        direction: TMsgDirection,
-        cursor: number | null
-      ) =>
-        await getMsgsByConvId(
-          repos.msgRepo,
-          conversationId,
-          limit,
-          direction,
-          cursor
-        ),
-      getAllMsgs: async () => await getAllMsgs(repos.msgRepo),
-      getAllPendingMsgs: async () =>
-        await getAllPendingMsgs(repos.pendingMsgRepo),
+      sendMessage: withErrorHandling(
+        async (payload: Parameters<typeof sendMsg>[5]) =>
+          await sendMsg(
+            repos.msgRepo,
+            repos.pendingMsgRepo,
+            eventBus,
+            communicationManager,
+            transactionManager,
+            payload
+          ),
+        "sendMessage"
+      ),
+      getMsgsByConvId: withErrorHandling(
+        async (
+          conversationId: IMsgEntity["conversationId"],
+          limit = 20,
+          direction: TMsgDirection,
+          cursor: number | null
+        ) =>
+          await getMsgsByConvId(
+            repos.msgRepo,
+            conversationId,
+            limit,
+            direction,
+            cursor
+          ),
+        "getMsgsByConvId"
+      ),
+      getAllMsgs: withErrorHandling(
+        async () => await getAllMsgs(repos.msgRepo),
+        "getAllMsgs"
+      ),
+      getAllPendingMsgs: withErrorHandling(
+        async () => await getAllPendingMsgs(repos.pendingMsgRepo),
+        "getAllPendingMsgs"
+      ),
+      startTyping: withErrorHandling(
+        async (userId: string, conversationId: string) =>
+          await startTyping(communicationManager, userId, conversationId),
+        "startTyping"
+      ),
+      stopTyping: withErrorHandling(
+        async (userId: string, conversationId: string) =>
+          await stopTyping(communicationManager, userId, conversationId),
+        "stopTyping"
+      ),
     },
     user: {
-      getAllUsers: async () => await getAllUsers(repos.userRepo),
-      getUserById: async (id: Parameters<typeof getUserById>[1]) =>
-        await getUserById(repos.userRepo, id),
-      getAllUsersIgnore: async (userId: Parameters<typeof getAllUsers>[1]) =>
-        await getAllUsers(repos.userRepo, userId),
+      getAllUsers: withErrorHandling(
+        async () => await getAllUsers(repos.userRepo),
+        "getAllUsers"
+      ),
+      getUserById: withErrorHandling(
+        async (id: Parameters<typeof getUserById>[1]) =>
+          await getUserById(repos.userRepo, id),
+        "getUserById"
+      ),
+      getAllUsersIgnore: withErrorHandling(
+        async (userId: Parameters<typeof getAllUsers>[1]) =>
+          await getAllUsers(repos.userRepo, userId),
+        "getAllUsersIgnore"
+      ),
+      requestAllOnlineUsers: withErrorHandling(
+        async () => await requestAllOnlineUsers(communicationManager),
+        "requestAllOnlineUsers"
+      ),
+      requestUsersStatus: withErrorHandling(
+        async (userIds: string[]) =>
+          await requestUsersStatus(communicationManager, userIds),
+        "requestUsersStatus"
+      ),
+      sendHeartbeat: withErrorHandling(
+        async (userId: string, timestamp: number) =>
+          await sendHeartbeat(communicationManager, userId, timestamp),
+        "sendHeartbeat"
+      ),
     },
   };
 }

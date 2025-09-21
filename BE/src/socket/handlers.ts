@@ -6,18 +6,23 @@ import { EventPayloads } from "../types/payloads";
 import {
   addPendingMessage,
   addServerIdMapping,
+  addTypingUser,
   addUserSocket,
   clearPendingMessages,
+  getOnlineUsersWithDetails,
   getPendingMessages,
   getUserSocketIds,
   isUserOnline,
-  removeUserSocket,
-  addTypingUser,
   removeTypingUser,
-  getTypingUsers,
-  getAllOnlineUsers,
+  removeUserSocket,
 } from "./state";
-import { findSender, notifySender } from "./utils";
+import {
+  broadcastUserStatusChange,
+  findSender,
+  handleUserHeartbeat,
+  notifySender,
+  sendOnlineUsersList,
+} from "./utils";
 
 export function setupSocketHandlers(io: Server) {
   io.on("connection", (socket: AuthSocket) => {
@@ -32,6 +37,11 @@ export function setupSocketHandlers(io: Server) {
       ChatEvent.ONLINE_STATUS_REQUEST,
       handleOnlineStatusRequest(socket, io)
     );
+    socket.on(
+      ChatEvent.GET_ALL_ONLINE_USERS,
+      handleGetAllOnlineUsers(socket, io)
+    );
+    socket.on(ChatEvent.HEARTBEAT, handleHeartbeat(socket, io));
     socket.on("disconnect", handleDisconnect(socket, io));
   });
 }
@@ -43,12 +53,10 @@ function handleRegister(socket: AuthSocket, io: Server) {
     addUserSocket(userId, socket.id);
     socket.userId = userId;
 
-    // Join user to their own room for easier targeting
     socket.join(userId);
 
-    // If user was offline and now comes online, notify others
     if (wasOffline) {
-      socket.broadcast.emit(ChatEvent.USER_ONLINE, { userId });
+      broadcastUserStatusChange(io, userId, "online", socket.id);
     }
 
     const pending = getPendingMessages(userId);
@@ -59,6 +67,8 @@ function handleRegister(socket: AuthSocket, io: Server) {
       });
       clearPendingMessages(userId);
     }
+
+    sendOnlineUsersList(io, socket.id);
   };
 }
 
@@ -119,11 +129,14 @@ function handleDisconnect(socket: AuthSocket, io: Server) {
   return () => {
     const userId = socket.userId;
     if (userId) {
+      const wasOnline = isUserOnline(userId);
       removeUserSocket(userId, socket.id);
       console.log(`🔌 User ${userId} disconnected from socket ${socket.id}`);
 
-      // Notify other users that this user went offline
-      socket.broadcast.emit(ChatEvent.USER_OFFLINE, { userId });
+      // Only notify if user went completely offline (no more sockets)
+      if (wasOnline && !isUserOnline(userId)) {
+        broadcastUserStatusChange(io, userId, "offline", socket.id);
+      }
 
       // Remove typing status for all conversations when user disconnects
       // This would require additional state tracking to know which conversations the user was typing in
@@ -176,6 +189,37 @@ function handleOnlineStatusRequest(socket: AuthSocket, io: Server) {
 
     socket.emit(ChatEvent.ONLINE_STATUS_RESPONSE, {
       onlineUsers,
+    });
+  };
+}
+
+// New handlers for enhanced user status
+function handleGetAllOnlineUsers(socket: AuthSocket, io: Server) {
+  return () => {
+    const onlineUsers = getOnlineUsersWithDetails();
+    socket.emit(ChatEvent.ALL_ONLINE_USERS_RESPONSE, {
+      onlineUsers: onlineUsers.map((user) => ({
+        userId: user.userId,
+        status: user.status,
+        lastSeen: user.lastSeen,
+      })),
+    });
+  };
+}
+
+function handleHeartbeat(socket: AuthSocket, io: Server) {
+  return ({ userId, timestamp }: EventPayloads[ChatEvent.HEARTBEAT]) => {
+    if (!socket.userId || socket.userId !== userId) {
+      console.error("Unauthorized heartbeat request");
+      return;
+    }
+
+    handleUserHeartbeat(userId);
+
+    // Optionally send back confirmation
+    socket.emit(ChatEvent.USER_LAST_SEEN_UPDATE, {
+      userId,
+      lastSeen: timestamp,
     });
   };
 }

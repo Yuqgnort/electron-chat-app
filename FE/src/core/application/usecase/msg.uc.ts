@@ -6,81 +6,81 @@ import {
   TMsgDirection,
 } from "@/core/domain/msg/entity";
 import { IMsgRepo } from "@/core/domain/msg/repo";
-import { IEventBus } from "../eventbus";
+import { assertExists, withErrorHandling } from "../error";
 
 /////////////////////
 
-export async function getMsgById(msgRepo: IMsgRepo, id: IMsgEntity["id"]) {
-  return msgRepo.getById(id);
-}
+export const getMsgById = withErrorHandling(
+  (msgRepo: IMsgRepo, id: IMsgEntity["id"]) => {
+    return msgRepo.getById(id);
+  },
+  "getMsgById"
+);
 
-export async function getMsgsByConvId(
-  msgRepo: IMsgRepo,
-  conversationId: IMsgEntity["conversationId"],
-  limit: number,
-  direction: TMsgDirection,
-  cursor: IMsgEntity["createdAt"] | null
-) {
-  return msgRepo.getByConversationId(conversationId, limit, direction, cursor);
-}
+export const getMsgsByConvId = withErrorHandling(
+  (
+    msgRepo: IMsgRepo,
+    conversationId: IMsgEntity["conversationId"],
+    limit: number,
+    direction: TMsgDirection,
+    cursor: IMsgEntity["createdAt"] | null
+  ) => {
+    return msgRepo.getByConversationId(
+      conversationId,
+      limit,
+      direction,
+      cursor
+    );
+  },
+  "getMsgsByConvId"
+);
 
-export async function getAllMsgs(msgRepo: IMsgRepo) {
+export const getAllMsgs = withErrorHandling((msgRepo: IMsgRepo) => {
   return msgRepo.getAll();
-}
+}, "getAllMsgs");
 
-export async function getByLocalId(
-  msgRepo: IMsgRepo,
-  localId: IMsgEntity["localId"]
-) {
-  return msgRepo.getByLocalId(localId);
-}
+export const getByLocalId = withErrorHandling(
+  (msgRepo: IMsgRepo, localId: IMsgEntity["localId"]) => {
+    return msgRepo.getByLocalId(localId);
+  },
+  "getByLocalId"
+);
 
-export async function getByServerId(msgRepo: IMsgRepo, serverId: string) {
-  return msgRepo.getByServerId(serverId);
-}
+export const getByServerId = withErrorHandling(
+  (msgRepo: IMsgRepo, serverId: string) => {
+    return msgRepo.getByServerId(serverId);
+  },
+  "getByServerId"
+);
 
 /////////////////////
 
-export async function createMsg(
-  msgRepo: IMsgRepo,
-  eventBus: IEventBus,
-  msg: Parameters<typeof createInitMsg>[0]
-) {
-  const initNewMsg = createInitMsg(msg);
-  const newMsg = await msgRepo.save(initNewMsg);
-  newMsg &&
-    eventBus.publish({
-      type: "MsgCreated",
-      payload: newMsg,
-    });
-  return newMsg;
-}
+export const createMsg = withErrorHandling(
+  async (msgRepo: IMsgRepo, msg: Parameters<typeof createInitMsg>[0]) => {
+    const initNewMsg = createInitMsg(msg);
+    const newMsg = assertExists(
+      await msgRepo.save(initNewMsg),
+      "Failed to create message"
+    );
+    return newMsg;
+  },
+  "createMsg"
+);
 
-export async function setMsgSent(
-  msgRepo: IMsgRepo,
-  eventBus: IEventBus,
-  msg: IMsgEntity
-) {
-  const updated = markMsgAsSent(msg);
+export const setMsgSent = withErrorHandling(
+  async (msgRepo: IMsgRepo, msg: IMsgEntity) => {
+    const updated = markMsgAsSent(msg);
+    await msgRepo.update(updated);
+    return updated;
+  },
+  "setMsgSent"
+);
 
-  await msgRepo.update(updated);
-  eventBus.publish({
-    type: "MsgUpdated",
-    payload: updated,
-  });
-  return updated;
-}
-
-export async function setMsgDelivered(
-  msgRepo: IMsgRepo,
-  eventBus: IEventBus,
-  msg: IMsgEntity
-) {
-  const updated = markMsgAsDelivered(msg);
-  await msgRepo.update(updated);
-  eventBus.publish({
-    type: "MsgUpdated",
-    payload: updated,
-  });
-  return updated;
-}
+export const setMsgDelivered = withErrorHandling(
+  async (msgRepo: IMsgRepo, msg: IMsgEntity) => {
+    const updated = markMsgAsDelivered(msg);
+    await msgRepo.update(updated);
+    return updated;
+  },
+  "setMsgDelivered"
+);

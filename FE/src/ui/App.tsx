@@ -36,21 +36,21 @@ export function App() {
     if (!chatBoxState?.receiverUser || !currentUser) {
       throw new Error("Receiver user or current user is not set");
     }
-    const conv = await service.conv.createConvWithParticipants(
+    const rs = await service.conv.createConvWithParticipants(
       { title: "New Conversation" },
       [currentUser.id, chatBoxState.receiverUser.id]
     );
 
-    if (!conv) {
+    if (!rs) {
       throw new Error("Failed to create or get conversation");
     }
 
     setChatBoxState({
       ...chatBoxState,
-      conversationId: conv.id,
+      conversationId: rs.conv.id,
     });
 
-    return conv.id;
+    return rs.conv.id;
   };
 
   const handleSendMessage = async (content: string) => {

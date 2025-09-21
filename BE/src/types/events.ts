@@ -12,4 +12,10 @@ export enum ChatEvent {
   USER_OFFLINE = "user:offline",
   ONLINE_STATUS_REQUEST = "status:request",
   ONLINE_STATUS_RESPONSE = "status:response",
+  // New events for enhanced user status
+  GET_ALL_ONLINE_USERS = "users:get_all_online",
+  ALL_ONLINE_USERS_RESPONSE = "users:all_online_response",
+  USER_STATUS_CHANGE = "user:status_change",
+  HEARTBEAT = "heartbeat",
+  USER_LAST_SEEN_UPDATE = "user:last_seen_update",
 }

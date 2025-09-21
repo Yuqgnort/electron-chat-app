@@ -1,7 +1,7 @@
 import { IConvPartRepo } from "../domain/conv-part/repo";
 import { IConvEntity } from "../domain/conv/entity";
 import { IConvRepo } from "../domain/conv/repo";
-import { IMsgEntity } from "../domain/msg/entity";
+import { createInitMsg, IMsgEntity } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
 import { IUserEntity } from "../domain/user/entity";
@@ -29,22 +29,41 @@ export const createConvWithParticipants = async (
   eventBus: IEventBus,
   transactionManager: ITransactionManager
 ) => {
-  return await transactionManager.executeInTransaction(
+  const result = await transactionManager.executeInTransaction(
     ["conversations", "conversationParts", "messages"],
     async () => {
-      const newConv = await createConv(convRepo, eventBus, conv, userIds);
-      newConv &&
-        (await Promise.all(
-          userIds.map((userId) =>
-            createConvPart(convPartRepo, eventBus, {
-              conversationId: newConv.id,
-              userId,
-            })
-          )
-        ));
-      return newConv;
+      const newConv = await createConv(convRepo, conv, userIds);
+      if (!newConv) throw new Error("Failed to create conversation");
+      const convParts = await Promise.all(
+        userIds.map((userId) =>
+          createConvPart(convPartRepo, {
+            conversationId: newConv.id,
+            userId,
+          })
+        )
+      );
+
+      return { conv: newConv, convParts: convParts.filter(Boolean) };
     }
   );
+
+  if (result?.conv) {
+    await eventBus.publishAsync({
+      type: "ConvCreated",
+      payload: result.conv,
+    });
+  }
+
+  if (result?.convParts?.length) {
+    for (const cp of result.convParts) {
+      await eventBus.publishAsync({
+        type: "ConvPartCreated",
+        payload: cp,
+      });
+    }
+
+    return result;
+  }
 };
 
 export const sendMsg = async (
@@ -53,7 +72,7 @@ export const sendMsg = async (
   eventBus: IEventBus,
   communicationManager: ICommunicationManager,
   transactionManager: ITransactionManager,
-  msg: Parameters<typeof createMsg>[2]
+  msg: Parameters<typeof createInitMsg>[0]
 ) => {
   await transactionManager
     .executeInTransaction(
@@ -65,9 +84,13 @@ export const sendMsg = async (
         "users",
       ],
       async () => {
-        const newMsg = await createMsg(msgRepo, eventBus, msg);
+        const newMsg = await createMsg(msgRepo, msg);
+        eventBus.publishAsync({
+          type: "MsgCreated",
+          payload: newMsg,
+        });
         if (newMsg) {
-          await addPendingMsg(pendingMsgRepo, eventBus, {
+          await addPendingMsg(pendingMsgRepo, {
             content: msg.content,
             senderId: msg.senderId,
             receiverId: msg.receiverId,
@@ -160,4 +183,41 @@ export const getConvsWithParticipantsByUserId = async (
   return results.sort(
     (a, b) => b.conversation.updatedAt - a.conversation.updatedAt
   );
+};
+
+export const stopTyping = async (
+  communicationManager: ICommunicationManager,
+  conversationId: string,
+  userId: string
+) => {
+  await communicationManager.stopTyping({ conversationId, userId });
+};
+
+export const startTyping = async (
+  communicationManager: ICommunicationManager,
+  conversationId: string,
+  userId: string
+) => {
+  await communicationManager.startTyping({ conversationId, userId });
+};
+
+export const requestAllOnlineUsers = async (
+  communicationManager: ICommunicationManager
+) => {
+  await communicationManager.requestAllOnlineUsers({});
+};
+
+export const requestUsersStatus = async (
+  communicationManager: ICommunicationManager,
+  userIds: string[]
+) => {
+  await communicationManager.requestUsersStatus({ userIds });
+};
+
+export const sendHeartbeat = async (
+  communicationManager: ICommunicationManager,
+  userId: string,
+  timestamp: number
+) => {
+  await communicationManager.sendHeartbeat({ userId, timestamp });
 };

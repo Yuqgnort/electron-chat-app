@@ -1,22 +1,26 @@
 import { IUserEntity } from "@/core/domain/user/entity";
 import { IUserRepo } from "@/core/domain/user/repo";
+import { withErrorHandling } from "../error";
 
 ////////////////////
 
-export async function getUserById(userRepo: IUserRepo, id: IUserEntity["id"]) {
-  return userRepo.getById(id);
-}
+export const getUserById = withErrorHandling(
+  (userRepo: IUserRepo, id: IUserEntity["id"]) => {
+    return userRepo.getById(id);
+  },
+  "getUserById"
+);
 
-export async function getUserByUsername(
-  userRepo: IUserRepo,
-  username: IUserEntity["userName"]
-) {
-  return userRepo.getByUserName(username);
-}
+export const getUserByUsername = withErrorHandling(
+  (userRepo: IUserRepo, username: IUserEntity["userName"]) => {
+    return userRepo.getByUserName(username);
+  },
+  "getUserByUsername"
+);
 
-export async function getAllUsers(
-  userRepo: IUserRepo,
-  ignoreId?: IUserEntity["id"][]
-) {
-  return userRepo.getAll({ ignoreId });
-}
+export const getAllUsers = withErrorHandling(
+  (userRepo: IUserRepo, ignoreId?: IUserEntity["id"][]) => {
+    return userRepo.getAll({ ignoreId });
+  },
+  "getAllUsers"
+);

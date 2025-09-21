@@ -46,7 +46,7 @@ export function createSocketClient(
         reconnection: true,
       });
       socket.on("connect", () => {
-        eventBus.publish({ type: "connect", payload: null });
+        eventBus.publishAsync({ type: "connect", payload: null });
       });
       socket.on("disconnect", (rp) => {});
       socket.on("msg:ack", (rp) => {
@@ -61,19 +61,39 @@ export function createSocketClient(
       socket.on("msg:incoming", (rp) => {
         eventBus.publish({ type: "msg:incoming", payload: rp });
       });
+      socket.on("user:online", (rp) => {
+        eventBus.publish({ type: "user:online", payload: rp });
+      });
+      socket.on("user:offline", (rp) => {
+        eventBus.publish({ type: "user:offline", payload: rp });
+      });
+      socket.on("users:all_online_response", (rp) => {
+        eventBus.publish({ type: "users:all_online_response", payload: rp });
+      });
+      socket.on("user:status_change", (rp) => {
+        eventBus.publish({ type: "user:status_change", payload: rp });
+      });
+      socket.on("user:last_seen_update", (rp) => {
+        eventBus.publish({ type: "user:last_seen_update", payload: rp });
+      });
+      socket.on("typing:indicator", (rp) => {
+        eventBus.publish({ type: "typing:indicator", payload: rp });
+      });
     },
+
     disconnect() {
       socket?.disconnect();
       socket = null;
     },
+
     isConnected() {
       return socket?.connected ?? false;
     },
+
     connectAndRegister(userId: string) {
       if (!socket) {
         this.connect();
       }
-
       const registerUser = () => {
         if (socket && socket.connected) {
           socket.emit("register", { userId });
@@ -86,12 +106,14 @@ export function createSocketClient(
         socket?.on("connect", registerUser);
       }
     },
-    register(userId: string) {
+
+    register(userId) {
       if (!socket || !socket.connected) {
         throw new Error("Socket not connected");
       }
       socket.emit("register", { userId });
     },
+
     async sendMessage(msg): Promise<void> {
       if (!socket || !socket.connected) {
         throw new Error("Socket not connected");
@@ -105,11 +127,50 @@ export function createSocketClient(
         createdAt: msg.createdAt,
       });
     },
+
     async deliverMessage(payload): Promise<void> {
       if (!socket || !socket.connected) {
         throw new Error("Socket not connected");
       }
       socket.emit("msg:delivered", payload);
+    },
+
+    async requestAllOnlineUsers(): Promise<void> {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("users:get_all_online", {});
+    },
+
+    async requestUsersStatus({ userIds }): Promise<void> {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("status:request", { userIds });
+    },
+
+    async sendHeartbeat({ userId, timestamp }): Promise<void> {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("heartbeat", {
+        userId,
+        timestamp,
+      });
+    },
+
+    async startTyping({ userId, conversationId }): Promise<void> {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("typing:start", { userId, conversationId });
+    },
+
+    async stopTyping({ userId, conversationId }): Promise<void> {
+      if (!socket || !socket.connected) {
+        throw new Error("Socket not connected");
+      }
+      socket.emit("typing:stop", { userId, conversationId });
     },
   };
 }

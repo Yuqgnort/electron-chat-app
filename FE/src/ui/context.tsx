@@ -16,3 +16,5 @@ export const useAppContext = () => {
 export function AppProvider({ children, ...props }: TAppProviderProps) {
   return <AppContext.Provider value={props}>{children}</AppContext.Provider>;
 }
+
+export const AppContextProvider = AppProvider;

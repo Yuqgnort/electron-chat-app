@@ -5,62 +5,56 @@ import {
 } from "@/core/domain/pending-msg/entity";
 import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
 import { IEventBus } from "../eventbus";
+import { assertExists, withErrorHandling } from "../error";
 
-export const addPendingMsg = async (
-  pendingMsgRepo: IPendingMsgRepo,
-  eventBus: IEventBus,
-  params: Parameters<typeof createPendingMsg>[0]
-): Promise<IPendingMsgEntity | null> => {
-  const pendingMsgData = createPendingMsg(params);
+/////////////////////
 
-  const pendingMsg = await pendingMsgRepo.save(pendingMsgData);
-  if (pendingMsg) {
-    eventBus.publish({
-      type: "PendingMsgCreated",
-      payload: pendingMsg,
-    });
-  }
+export const getAllPendingMsgs = withErrorHandling(
+  (pendingMsgRepo: IPendingMsgRepo): Promise<IPendingMsgEntity[]> => {
+    return pendingMsgRepo.getAll();
+  },
+  "getAllPendingMsgs"
+);
 
-  return pendingMsg;
-};
+/////////////////////
 
-export const retryPendingMsg = async (
-  pendingMsgRepo: IPendingMsgRepo,
-  eventBus: IEventBus,
-  pendingMsg: IPendingMsgEntity
-): Promise<IPendingMsgEntity | null> => {
-  const updatedPendingMsg = incrementRetryCount(pendingMsg);
-  const result = await pendingMsgRepo.update(updatedPendingMsg);
+export const addPendingMsg = withErrorHandling(
+  async (
+    pendingMsgRepo: IPendingMsgRepo,
+    params: Parameters<typeof createPendingMsg>[0]
+  ): Promise<IPendingMsgEntity> => {
+    const pendingMsgData = createPendingMsg(params);
+    const pendingMsg = assertExists(
+      await pendingMsgRepo.save(pendingMsgData),
+      "Failed to create pending message"
+    );
+    return pendingMsg;
+  },
+  "addPendingMsg"
+);
 
-  if (result) {
-    eventBus.publish({
-      type: "PendingMsgRetried",
-      payload: result,
-    });
-  }
+export const retryPendingMsg = withErrorHandling(
+  async (
+    pendingMsgRepo: IPendingMsgRepo,
+    pendingMsg: IPendingMsgEntity
+  ): Promise<IPendingMsgEntity> => {
+    const updatedPendingMsg = incrementRetryCount(pendingMsg);
+    const result = assertExists(
+      await pendingMsgRepo.update(updatedPendingMsg),
+      `Failed to retry pending message ${pendingMsg.localId}`
+    );
+    return result;
+  },
+  "retryPendingMsg"
+);
 
-  return result;
-};
-
-export const removePendingMsg = async (
-  pendingMsgRepo: IPendingMsgRepo,
-  eventBus: IEventBus,
-  localId: string
-): Promise<boolean> => {
-  const success = await pendingMsgRepo.deleteByLocalId(localId);
-
-  if (success) {
-    eventBus.publish({
-      type: "PendingMsgRemoved",
-      payload: { localId },
-    });
-  }
-
-  return success;
-};
-
-export const getAllPendingMsgs = async (
-  pendingMsgRepo: IPendingMsgRepo
-): Promise<IPendingMsgEntity[]> => {
-  return pendingMsgRepo.getAll();
-};
+export const removePendingMsg = withErrorHandling(
+  async (
+    pendingMsgRepo: IPendingMsgRepo,
+    localId: string
+  ): Promise<boolean> => {
+    const success = await pendingMsgRepo.deleteByLocalId(localId);
+    return success;
+  },
+  "removePendingMsg"
+);

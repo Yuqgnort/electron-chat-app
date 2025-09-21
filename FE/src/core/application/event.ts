@@ -26,6 +26,51 @@ export type TIntegrationReceivedEvent =
         receiverId: string;
         content: string;
       };
+    }
+  | {
+      type: "user:online";
+      payload: {
+        userId: string;
+      };
+    }
+  | {
+      type: "user:offline";
+      payload: {
+        userId: string;
+      };
+    }
+  | {
+      type: "users:all_online_response";
+      payload: {
+        onlineUsers: {
+          userId: string;
+          status: "online" | "offline";
+          lastSeen: number;
+        }[];
+      };
+    }
+  | {
+      type: "user:status_change";
+      payload: {
+        userId: string;
+        status: "online" | "offline";
+        lastSeen: number;
+      };
+    }
+  | {
+      type: "user:last_seen_update";
+      payload: {
+        userId: string;
+        lastSeen: number;
+      };
+    }
+  | {
+      type: "typing:indicator";
+      payload: {
+        userId: string;
+        conversationId: string;
+        isTyping: boolean;
+      };
     };
 
 export type TIntegrationSentEvent =
@@ -49,4 +94,35 @@ export type TIntegrationSentEvent =
   | {
       type: "msg:delivered";
       payload: { serverId: string };
+    }
+  | {
+      type: "users:get_all_online";
+      payload: {};
+    }
+  | {
+      type: "status:request";
+      payload: {
+        userIds: string[];
+      };
+    }
+  | {
+      type: "heartbeat";
+      payload: {
+        userId: string;
+        timestamp: number;
+      };
+    }
+  | {
+      type: "typing:start";
+      payload: {
+        userId: string;
+        conversationId: string;
+      };
+    }
+  | {
+      type: "typing:stop";
+      payload: {
+        userId: string;
+        conversationId: string;
+      };
     };

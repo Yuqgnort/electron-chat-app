@@ -16,6 +16,7 @@ import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
 import { createPendingMsgRepoIdb } from "./infratructure/indexDB/repo/pending-msg.repo";
 import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
 import { createSocketClient } from "./infratructure/socket";
+import { SQLiteService } from "./infratructure/sqlite/service";
 
 /////////////////////////
 
@@ -69,8 +70,11 @@ const handleSeedUsers = async (
 /////////////////////////
 
 export async function bootstrap() {
-  // 1. Init DB
+  // 1. Init IndexedDB (main database)
   const db = await initDb();
+  const sqliteService = new SQLiteService();
+  await sqliteService.init();
+
   const msgRepo = createMsgRepoIdb(db);
   const userRepo = createUserRepoIdb(db);
   const convRepo = createConvRepoIdb(db);
@@ -79,15 +83,9 @@ export async function bootstrap() {
 
   await handleSeedUsers(db, userRepo);
 
-  const transactionManager = createIndexedDBTransactionManager(db);
-
-  // 2. Init EventBus
   const eventBus = createInMemoryEventBus();
-
-  // 3. Init Socket - Create socket client but don't connect yet
+  const transactionManager = createIndexedDBTransactionManager(db);
   const socket = createSocketClient("ws://localhost:3000", eventBus);
-
-  // 4. Register Handlers
 
   updateLastMsgHandler(eventBus, convRepo);
   updateMsgAckHandler(eventBus, msgRepo);
@@ -102,8 +100,6 @@ export async function bootstrap() {
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
 
-  // 5. Create App Service
-
   const service = createAppService(
     {
       convRepo,
@@ -117,12 +113,11 @@ export async function bootstrap() {
     socket
   );
 
-  // 6. Return all the things
-
   return {
     service,
     socket,
     eventBus,
+    sqliteService,
     db,
     repos: {
       msgRepo,

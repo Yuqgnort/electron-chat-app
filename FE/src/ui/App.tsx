@@ -13,16 +13,32 @@ import { MainLayout } from "./components/Layout/MainLayout";
 import { useAppContext } from "./context";
 import { useChatWindowStore } from "./hooks/store/useChatWindow";
 import { useCurrentUserStore } from "./hooks/store/useCurrentUser";
-import { useGetUsers } from "./hooks/tanstack/user";
-import { useConnectSocket } from "./hooks/useConnectSocket";
-import { useCheckIsOnNetwork } from "./hooks/useCheckIsOnline";
 import { GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID } from "./hooks/tanstack/conv";
+import { useGetUsers } from "./hooks/tanstack/user";
+import { useCheckIsOnNetwork } from "./hooks/useCheckIsOnline";
+import { useConnectSocket } from "./hooks/useConnectSocket";
 
 ////////////////////
 
 export function App() {
   const queryClient = useQueryClient();
-  const { service, socket, eventBus } = useAppContext();
+  const { service, socket, eventBus, sqliteService } = useAppContext();
+
+  (
+    sqliteService.createUser("nghia").then((res) => {
+      console.log("SQLite Users:", res);
+    }) as any
+  ).catch((err: any) => {
+    console.error("Error fetching users from SQLite:", err);
+  });
+
+  (
+    sqliteService.getUsers().then((res) => {
+      console.log("SQLite Users:", res);
+    }) as any
+  ).catch((err: any) => {
+    console.error("Error fetching users from SQLite:", err);
+  });
 
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { chatBoxState, setChatBoxState } = useChatWindowStore();
@@ -113,10 +129,14 @@ export function App() {
 
   return (
     <MainLayout>
-      <ChatWindow
-        onSendMessage={handleSendMessage}
-        receiverUser={chatBoxState?.receiverUser}
-      />
+      <div style={{ display: "flex", height: "100%" }}>
+        <div style={{ flex: 1 }}>
+          <ChatWindow
+            onSendMessage={handleSendMessage}
+            receiverUser={chatBoxState?.receiverUser}
+          />
+        </div>
+      </div>
     </MainLayout>
   );
 }

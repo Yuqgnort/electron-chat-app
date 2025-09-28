@@ -10,10 +10,10 @@ export class SQLiteWorkerDB {
     this.worker = new Worker(new URL("./sqlite-worker.ts", import.meta.url), {
       type: "module",
     });
-    this.worker.onmessage = this.handleMessage.bind(this);
+    this.worker.onmessage = this.handlePostMessage.bind(this);
   }
 
-  private handleMessage(event: MessageEvent) {
+  private handlePostMessage(event: MessageEvent) {
     const { type, result, error, id } = event.data;
     const pending = this.pendingMessages.get(id);
 
@@ -28,7 +28,7 @@ export class SQLiteWorkerDB {
     }
   }
 
-  private sendMessage(type: string, data: any = {}) {
+  private sendPostMessage(type: string, data: any = {}) {
     return new Promise((resolve, reject) => {
       const id = ++this.messageId;
       this.pendingMessages.set(id, { resolve, reject });
@@ -37,15 +37,15 @@ export class SQLiteWorkerDB {
   }
 
   async init() {
-    await this.sendMessage("init");
+    await this.sendPostMessage("init");
     console.log("SQLite Worker with OpfsDb initialized");
   }
 
   async exec(sql: string) {
-    return this.sendMessage("exec", { sql });
+    return this.sendPostMessage("exec", { sql });
   }
 
   async select(sql: string) {
-    return this.sendMessage("select", { sql });
+    return this.sendPostMessage("select", { sql });
   }
 }

@@ -1,20 +1,18 @@
-import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
-import { useAppContext } from "@/ui/context";
-import { LogOut } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Search } from "lucide-react";
+import { Button } from "../core/Button";
 
-export function CurrentUser() {
-  const { socket } = useAppContext();
-  const queryClient = useQueryClient();
-  const { currentUser, setCurrentUser } = useCurrentUserStore();
-  const { setChatBoxState } = useChatWindowStore();
+export function CurrentUser({
+  setIsSearchOpen,
+  isSearchOpen,
+}: {
+  isSearchOpen: boolean;
+  setIsSearchOpen: (isOpen: boolean) => void;
+}) {
+  const { currentUser } = useCurrentUserStore();
 
-  const logOut = () => {
-    socket.disconnect();
-    setCurrentUser(null);
-    setChatBoxState({ receiverUser: null, conversationId: null });
-    queryClient.clear();
+  const openSearch = () => {
+    setIsSearchOpen(true);
   };
 
   if (!currentUser) return null;
@@ -37,14 +35,15 @@ export function CurrentUser() {
             @{currentUser.userName}
           </p>
         </div>
-
-        <div className="relative">
-          <button
-            onClick={logOut}
-            className="p-1 rounded-full cursor-pointer hover:bg-gray-200 transition-colors"
+        <div className="relative group">
+          <Button
+            onClick={openSearch}
+            variant="ghost"
+            size="icon"
+            disabled={isSearchOpen}
           >
-            <LogOut className="w-4 h-4 text-gray-600" />
-          </button>
+            <Search />
+          </Button>
         </div>
       </div>
     </div>

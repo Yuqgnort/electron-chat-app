@@ -2,8 +2,10 @@ import { IConvPartRepo } from "@/core/domain/conv-part/repo";
 import { IConvRepo } from "@/core/domain/conv/repo";
 import { createInitMsg, EMsgStatus } from "@/core/domain/msg/entity";
 import { IMsgRepo } from "@/core/domain/msg/repo";
-import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
 import { IPendingMsgEntity } from "@/core/domain/pending-msg/entity";
+import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
+import { IUserRepo } from "@/core/domain/user/repo";
+import { SQLiteService } from "@/infratructure/sqlite/service";
 import { assertExists, withErrorHandling } from "../error";
 import { IEventBus } from "../eventbus";
 import { createConvWithParticipants } from "../services";
@@ -314,5 +316,106 @@ async function retrySinglePendingMsg(
     }
   );
 }
+
+export const autoIndexMessageHandler = (
+  eventBus: IEventBus,
+  sqliteService: SQLiteService,
+  userRepo: IUserRepo
+) => {
+  eventBus.subscribe(
+    "MsgCreated",
+    withErrorHandling(async ({ payload: msg }) => {
+      try {
+        // Check if message is already indexed to avoid duplicates
+        const isAlreadyIndexed = await sqliteService.isMessageIndexed(msg.id);
+        if (isAlreadyIndexed) {
+          console.log(`Message ${msg.id} already indexed, skipping`);
+          return;
+        }
+
+        const sender = await userRepo.getById(msg.senderId);
+        const senderName = sender?.userName || "Unknown";
+
+        await sqliteService.indexMessage(
+          msg.id,
+          msg.content,
+          senderName,
+          msg.conversationId,
+          msg.createdAt
+        );
+
+        console.log(`Message ${msg.id} indexed in FTS`);
+      } catch (error) {
+        console.error("Failed to index message in FTS:", error);
+      }
+    }, "autoIndexMessageHandler")
+  );
+};
+
+export const indexExistingMessages = async (
+  msgRepo: IMsgRepo,
+  userRepo: IUserRepo,
+  sqliteService: SQLiteService
+) => {
+  try {
+    console.log("Checking for unindexed messages...");
+
+    const allMessages = await msgRepo.getAll();
+    if (!allMessages) {
+      console.log("No existing messages found");
+      return;
+    }
+
+    // Get already indexed message IDs
+    const indexedIds = await sqliteService.getIndexedMessageIds();
+    const indexedIdsSet = new Set(indexedIds);
+
+    // Filter out already indexed messages
+    const unindexedMessages = allMessages.filter(
+      (msg) => !indexedIdsSet.has(msg.id)
+    );
+
+    if (unindexedMessages.length === 0) {
+      console.log(`All ${allMessages.length} messages are already indexed`);
+      return;
+    }
+
+    console.log(
+      `Found ${unindexedMessages.length} unindexed messages out of ${allMessages.length} total`
+    );
+
+    let indexed = 0;
+    for (const msg of unindexedMessages) {
+      try {
+        const sender = await userRepo.getById(msg.senderId);
+        const senderName = sender?.userName || "Unknown";
+
+        await sqliteService.indexMessage(
+          msg.id,
+          msg.content,
+          senderName,
+          msg.conversationId,
+          new Date(msg.createdAt).toISOString()
+        );
+
+        indexed++;
+
+        if (indexed % 100 === 0) {
+          console.log(
+            `Indexed ${indexed}/${unindexedMessages.length} messages...`
+          );
+        }
+      } catch (error) {
+        console.error(`Failed to index existing message ${msg.id}:`, error);
+      }
+    }
+
+    console.log(
+      `Successfully indexed ${indexed} new messages (${indexedIds.length + indexed} total indexed)`
+    );
+  } catch (error) {
+    console.error("Failed to index existing messages:", error);
+  }
+};
 
 export { messageProcessingManager };

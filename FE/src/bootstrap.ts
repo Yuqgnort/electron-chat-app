@@ -1,5 +1,8 @@
-import { createInMemoryEventBus } from "./core/application/eventbus";
+import { s } from "node_modules/framer-motion/dist/types.d-Cjd591yU";
+import { createInMemoryEventBus, IEventBus } from "./core/application/eventbus";
 import {
+  autoIndexMessageHandler,
+  indexExistingMessages,
   retrySendingPendingMessagesHandler,
   updateLastMsgHandler,
   updateMsgAckHandler,
@@ -10,13 +13,14 @@ import { createAppService } from "./core/application/services-facade";
 import { EUserGender, IUserEntity } from "./core/domain/user/entity";
 import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
 import { ChatDb, initDb } from "./infratructure/indexDB/init";
-import { createConvPartRepoIdb } from "./infratructure/indexDB/repo/conv-part.repo";
-import { createConvRepoIdb } from "./infratructure/indexDB/repo/conv.repo";
-import { createMsgRepoIdb } from "./infratructure/indexDB/repo/msg.repo";
-import { createPendingMsgRepoIdb } from "./infratructure/indexDB/repo/pending-msg.repo";
-import { createUserRepoIdb } from "./infratructure/indexDB/repo/user.repo";
+import { createConvPartRepoIdb } from "./infratructure/indexDB/repos/conv-part.repo";
+import { createConvRepoIdb } from "./infratructure/indexDB/repos/conv.repo";
+import { createMsgRepoIdb } from "./infratructure/indexDB/repos/msg.repo";
+import { createPendingMsgRepoIdb } from "./infratructure/indexDB/repos/pending-msg.repo";
+import { createUserRepoIdb } from "./infratructure/indexDB/repos/user.repo";
 import { createSocketClient } from "./infratructure/socket";
 import { SQLiteService } from "./infratructure/sqlite/service";
+import { withErrorHandling } from "./core/application/error";
 
 /////////////////////////
 
@@ -70,7 +74,6 @@ const handleSeedUsers = async (
 /////////////////////////
 
 export async function bootstrap() {
-  // 1. Init IndexedDB (main database)
   const db = await initDb();
   const sqliteService = new SQLiteService();
   await sqliteService.init();
@@ -99,6 +102,8 @@ export async function bootstrap() {
     socket
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
+  autoIndexMessageHandler(eventBus, sqliteService, userRepo);
+  indexExistingMessages(msgRepo, userRepo, sqliteService).catch(console.error);
 
   const service = createAppService(
     {
@@ -114,10 +119,17 @@ export async function bootstrap() {
   );
 
   return {
-    service,
+    service: {
+      ...service,
+      resetChatDataKeepUsers: withErrorHandling(
+        async (onSuccess?: Parameters<typeof resetChatDataKeepUsers>[2]) =>
+          await resetChatDataKeepUsers(db, sqliteService, onSuccess),
+        "resetChatDataKeepUsers"
+      ),
+      search: sqliteService,
+    },
     socket,
     eventBus,
-    sqliteService,
     db,
     repos: {
       msgRepo,
@@ -130,3 +142,43 @@ export async function bootstrap() {
 }
 
 export type TBootstrapReturn = Awaited<ReturnType<typeof bootstrap>>;
+
+export interface ResetResult {
+  success: boolean;
+  message: string;
+  clearedStats?: any;
+  error?: string;
+}
+
+export async function resetChatDataKeepUsers(
+  db: ChatDb,
+  searchDb: SQLiteService,
+  onSuccess?: () => void
+): Promise<ResetResult> {
+  try {
+    const indexStats = await searchDb.getIndexStats();
+    await searchDb.clearIndex();
+    await db.transaction(
+      "rw",
+      [db.messages, db.conversations, db.conversationParts, db.pendingMessages],
+      async () => {
+        await db.messages.clear();
+        await db.conversations.clear();
+        await db.conversationParts.clear();
+        await db.pendingMessages.clear();
+      }
+    );
+    if (onSuccess) onSuccess();
+    return {
+      success: true,
+      clearedStats: indexStats,
+      message: "All chat data cleared, users preserved",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      message: "Failed to reset chat data",
+    };
+  }
+}

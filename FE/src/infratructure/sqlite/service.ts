@@ -52,7 +52,6 @@ export class SQLiteService {
   async getAutocompleteSuggestions(query: string, limit: number = 10) {
     await this.ensureInit();
     const cleanQuery = query.replace(/'/g, "''");
-
     const sql = `
       SELECT DISTINCT 
         SUBSTR(content, 1, INSTR(content || ' ', ' ')) as suggestion,
@@ -102,6 +101,47 @@ export class SQLiteService {
   async removeMessageFromIndex(messageId: string) {
     await this.ensureInit();
     return this.db.exec(`DELETE FROM messages_fts WHERE id = '${messageId}'`);
+  }
+
+  async isMessageIndexed(messageId: string) {
+    await this.ensureInit();
+    const result = (await this.db.select(`
+      SELECT COUNT(*) as count FROM messages_fts WHERE id = '${messageId}'
+    `)) as any[];
+    return result && result.length > 0 && result[0].count > 0;
+  }
+
+  async getIndexedMessageIds() {
+    await this.ensureInit();
+    const result = (await this.db.select(
+      `SELECT id FROM messages_fts`
+    )) as any[];
+    return result ? result.map((row: any) => row.id) : [];
+  }
+
+  async clearIndex() {
+    await this.ensureInit();
+    return this.db.exec(`DELETE FROM messages_fts`);
+  }
+
+  // Get statistics about indexed data
+  async getIndexStats() {
+    await this.ensureInit();
+    const result = (await this.db.select(`
+      SELECT 
+        COUNT(*) as total_messages,
+        COUNT(DISTINCT conversation_id) as total_conversations,
+        COUNT(DISTINCT sender_name) as total_senders
+      FROM messages_fts
+    `)) as any[];
+
+    return result && result.length > 0
+      ? result[0]
+      : {
+          total_messages: 0,
+          total_conversations: 0,
+          total_senders: 0,
+        };
   }
 
   async exec(sql: string) {

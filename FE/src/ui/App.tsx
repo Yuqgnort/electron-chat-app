@@ -22,23 +22,7 @@ import { useConnectSocket } from "./hooks/useConnectSocket";
 
 export function App() {
   const queryClient = useQueryClient();
-  const { service, socket, eventBus, sqliteService } = useAppContext();
-
-  (
-    sqliteService.createUser("nghia").then((res) => {
-      console.log("SQLite Users:", res);
-    }) as any
-  ).catch((err: any) => {
-    console.error("Error fetching users from SQLite:", err);
-  });
-
-  (
-    sqliteService.getUsers().then((res) => {
-      console.log("SQLite Users:", res);
-    }) as any
-  ).catch((err: any) => {
-    console.error("Error fetching users from SQLite:", err);
-  });
+  const { service, socket } = useAppContext();
 
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { chatBoxState, setChatBoxState } = useChatWindowStore();
@@ -129,14 +113,10 @@ export function App() {
 
   return (
     <MainLayout>
-      <div style={{ display: "flex", height: "100%" }}>
-        <div style={{ flex: 1 }}>
-          <ChatWindow
-            onSendMessage={handleSendMessage}
-            receiverUser={chatBoxState?.receiverUser}
-          />
-        </div>
-      </div>
+      <ChatWindow
+        onSendMessage={handleSendMessage}
+        receiverUser={chatBoxState?.receiverUser}
+      />
     </MainLayout>
   );
 }

@@ -9,6 +9,9 @@ import {
   updateMsgDeliveredHandler,
   updateMsgIncomingHandler,
 } from "./core/application/handler/msg.hdl";
+import { globalHandlerRegistry } from "./core/application/handler-registry";
+import { debugHandlerRegistry } from "./core/application/handler-debug";
+import { debugPendingMessages } from "./core/application/debug-pending";
 import { createAppService } from "./core/application/services-facade";
 import { ISearchRepository } from "./core/domain/search/repo";
 import { EUserGender, IUserEntity } from "./core/domain/user/entity";
@@ -92,8 +95,10 @@ export async function bootstrap() {
   const transactionManager = createIndexedDBTransactionManager(db);
   const socket = createSocketClient("ws://localhost:3000", eventBus);
 
+  console.log("[Bootstrap] Registering event handlers...");
+
   updateLastMsgHandler(eventBus, convRepo);
-  updateMsgAckHandler(eventBus, msgRepo);
+  updateMsgAckHandler(eventBus, msgRepo, pendingMsgRepo);
   updateMsgDeliveredHandler(eventBus, msgRepo);
   updateMsgIncomingHandler(
     eventBus,
@@ -105,6 +110,19 @@ export async function bootstrap() {
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
   autoIndexMessageHandler(eventBus, searchRepo, userRepo);
+
+  console.log(
+    `[Bootstrap] Registered handlers:`,
+    globalHandlerRegistry.getRegisteredHandlers()
+  );
+  debugHandlerRegistry();
+
+  // Add global debug function for pending messages
+  if (typeof window !== "undefined") {
+    (window as any).debugPendingMessages = () =>
+      debugPendingMessages(pendingMsgRepo);
+  }
+
   indexExistingMessages(msgRepo, userRepo, searchRepo);
 
   const service = createAppService(

@@ -85,6 +85,10 @@ export const sendMsg = async (
     async () => {
       const newMsg = await createMsg(msgRepo, msg);
       if (!newMsg) throw new Error("Failed to create message");
+
+      console.log(
+        `[sendMessage] Creating pending message for localId: ${newMsg.localId}`
+      );
       const pendingMsg = await addPendingMsg(pendingMsgRepo, {
         content: msg.content,
         senderId: msg.senderId,
@@ -93,6 +97,9 @@ export const sendMsg = async (
         localId: newMsg.localId!,
       });
       if (!pendingMsg) throw new Error("Failed to create pending message");
+      console.log(
+        `[sendMessage] ✅ Created pending message for localId: ${newMsg.localId}`
+      );
       return { newMsg, pendingMsg };
     }
   );

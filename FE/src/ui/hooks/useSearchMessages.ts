@@ -1,5 +1,6 @@
 import { useAppContext } from "@/ui/context";
 import { useQuery } from "@tanstack/react-query";
+import { ESearchType, ESearchScope } from "@/core/domain/search/entity";
 
 export interface SearchResult {
   id: string;
@@ -20,7 +21,7 @@ export interface ExactPhraseFilters {
   limit?: number;
 }
 
-type Params = {
+export type Params = {
   query: string;
   filters?: SearchFilters;
   enabled?: boolean;
@@ -34,7 +35,6 @@ export function useSearchMessagesQuery({
   staleTime = 0,
 }: Params) {
   const { service } = useAppContext();
-  const sqliteService = service.search;
 
   const { conversationId, limit = 50 } = filters;
   const isEnabled = enabled && !!query.trim();
@@ -44,11 +44,28 @@ export function useSearchMessagesQuery({
     enabled: isEnabled,
     staleTime,
     queryFn: async (): Promise<SearchResult[]> => {
-      let res = (await sqliteService.searchMessages(
+      const searchQuery = {
         query,
-        conversationId
-      )) as SearchResult[];
-      return limit && res.length > limit ? res.slice(0, limit) : res;
+        type: ESearchType.FULL_TEXT,
+        scope: conversationId
+          ? ESearchScope.CURRENT_CONVERSATION
+          : ESearchScope.ALL_CONVERSATIONS,
+        conversationId,
+        limit,
+      };
+
+      const result = conversationId
+        ? await service.search.searchInConversation(query, conversationId)
+        : await service.search.performSearch(searchQuery);
+
+      return result.items.map((item) => ({
+        id: item.id,
+        content: item.content,
+        sender_name: item.senderName,
+        conversation_id: item.conversationId,
+        created_at: new Date(item.createdAt).toISOString(),
+        rank: item.rank || 0,
+      }));
     },
   });
 }
@@ -60,7 +77,6 @@ export function useSearchExactPhraseQuery({
   staleTime = 0,
 }: Params) {
   const { service } = useAppContext();
-  const sqliteService = service.search;
 
   const { conversationId, limit = 50 } = filters;
   const isEnabled = enabled && !!query.trim();
@@ -70,11 +86,21 @@ export function useSearchExactPhraseQuery({
     enabled: isEnabled,
     staleTime,
     queryFn: async (): Promise<SearchResult[]> => {
-      let res = (await sqliteService.searchExactPhrase(
+      const result = await service.search.searchExactPhrase(
         query,
         conversationId
-      )) as SearchResult[];
-      return limit && res.length > limit ? res.slice(0, limit) : res;
+      );
+      const results = result.items.map((item) => ({
+        id: item.id,
+        content: item.content,
+        sender_name: item.senderName,
+        conversation_id: item.conversationId,
+        created_at: new Date(item.createdAt).toISOString(),
+        rank: item.rank || 0,
+      }));
+      return limit && results.length > limit
+        ? results.slice(0, limit)
+        : results;
     },
   });
 }

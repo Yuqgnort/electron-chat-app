@@ -3,6 +3,7 @@ import { IConvRepo } from "../domain/conv/repo";
 import { IMsgEntity, TMsgDirection } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
+import { ISearchRepository } from "../domain/search/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
 import { withErrorHandling } from "./error";
@@ -21,6 +22,24 @@ import {
 import { getConvByUserIds } from "./usecase/conv.uc";
 import { getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
 import { getAllPendingMsgs } from "./usecase/pending-msg.uc";
+import {
+  bulkIndexMessages,
+  getActiveUsers,
+  getSearchStats,
+  getSearchSuggestions,
+  getUserMessageCount,
+  getUserMessages,
+  indexMessage,
+  isMessageIndexed,
+  performAdvancedSearch,
+  performSearch,
+  removeMessageFromIndex,
+  searchExactPhrase,
+  searchInConversation,
+  searchMessagesByUser,
+  searchMessagesExcludingUser,
+  updateMessageInIndex,
+} from "./usecase/search.uc";
 import { getAllUsers, getUserById } from "./usecase/user.uc";
 
 type ExtractPayload<
@@ -63,6 +82,7 @@ export function createAppService(
     userRepo: IUserRepo;
     convPartRepo: IConvPartRepo;
     pendingMsgRepo: IPendingMsgRepo;
+    searchRepo: ISearchRepository;
   },
   eventBus: IEventBus,
   transactionManager: ITransactionManager,
@@ -178,6 +198,134 @@ export function createAppService(
         async (userId: string, timestamp: number) =>
           await sendHeartbeat(communicationManager, userId, timestamp),
         "sendHeartbeat"
+      ),
+    },
+    search: {
+      performSearch: withErrorHandling(
+        async (query: Parameters<typeof performSearch>[1]) =>
+          await performSearch(repos.searchRepo, query),
+        "performSearch"
+      ),
+      searchInConversation: withErrorHandling(
+        async (
+          query: Parameters<typeof searchInConversation>[1],
+          conversationId: Parameters<typeof searchInConversation>[2]
+        ) =>
+          await searchInConversation(repos.searchRepo, query, conversationId),
+        "searchInConversation"
+      ),
+      searchMessagesByUser: withErrorHandling(
+        async (
+          query: Parameters<typeof searchMessagesByUser>[1],
+          userId: Parameters<typeof searchMessagesByUser>[2],
+          conversationId?: Parameters<typeof searchMessagesByUser>[3]
+        ) =>
+          await searchMessagesByUser(
+            repos.searchRepo,
+            query,
+            userId,
+            conversationId
+          ),
+        "searchMessagesByUser"
+      ),
+      searchMessagesExcludingUser: withErrorHandling(
+        async (
+          query: Parameters<typeof searchMessagesExcludingUser>[1],
+          userId: Parameters<typeof searchMessagesExcludingUser>[2],
+          conversationId?: Parameters<typeof searchMessagesExcludingUser>[3]
+        ) =>
+          await searchMessagesExcludingUser(
+            repos.searchRepo,
+            query,
+            userId,
+            conversationId
+          ),
+        "searchMessagesExcludingUser"
+      ),
+      searchExactPhrase: withErrorHandling(
+        async (
+          phrase: Parameters<typeof searchExactPhrase>[1],
+          conversationId?: Parameters<typeof searchExactPhrase>[2]
+        ) => await searchExactPhrase(repos.searchRepo, phrase, conversationId),
+        "searchExactPhrase"
+      ),
+      getSearchSuggestions: withErrorHandling(
+        async (
+          query: Parameters<typeof getSearchSuggestions>[1],
+          limit?: Parameters<typeof getSearchSuggestions>[2]
+        ) => await getSearchSuggestions(repos.searchRepo, query, limit),
+        "getSearchSuggestions"
+      ),
+      getUserMessages: withErrorHandling(
+        async (
+          userId: Parameters<typeof getUserMessages>[1],
+          conversationId?: Parameters<typeof getUserMessages>[2],
+          limit?: Parameters<typeof getUserMessages>[3]
+        ) =>
+          await getUserMessages(
+            repos.searchRepo,
+            userId,
+            conversationId,
+            limit
+          ),
+        "getUserMessages"
+      ),
+      getActiveUsers: withErrorHandling(
+        async (conversationId?: Parameters<typeof getActiveUsers>[1]) =>
+          await getActiveUsers(repos.searchRepo, conversationId),
+        "getActiveUsers"
+      ),
+      indexMessage: withErrorHandling(
+        async (messageData: Parameters<typeof indexMessage>[1]) =>
+          await indexMessage(repos.searchRepo, messageData),
+        "indexMessage"
+      ),
+      updateMessageInIndex: withErrorHandling(
+        async (
+          messageId: Parameters<typeof updateMessageInIndex>[1],
+          content: Parameters<typeof updateMessageInIndex>[2],
+          senderName: Parameters<typeof updateMessageInIndex>[3],
+          senderId?: Parameters<typeof updateMessageInIndex>[4]
+        ) =>
+          await updateMessageInIndex(
+            repos.searchRepo,
+            messageId,
+            content,
+            senderName,
+            senderId
+          ),
+        "updateMessageInIndex"
+      ),
+      removeMessageFromIndex: withErrorHandling(
+        async (messageId: Parameters<typeof removeMessageFromIndex>[1]) =>
+          await removeMessageFromIndex(repos.searchRepo, messageId),
+        "removeMessageFromIndex"
+      ),
+      bulkIndexMessages: withErrorHandling(
+        async (messages: Parameters<typeof bulkIndexMessages>[1]) =>
+          await bulkIndexMessages(repos.searchRepo, messages),
+        "bulkIndexMessages"
+      ),
+      getSearchStats: withErrorHandling(
+        async () => await getSearchStats(repos.searchRepo),
+        "getSearchStats"
+      ),
+      isMessageIndexed: withErrorHandling(
+        async (messageId: Parameters<typeof isMessageIndexed>[1]) =>
+          await isMessageIndexed(repos.searchRepo, messageId),
+        "isMessageIndexed"
+      ),
+      getUserMessageCount: withErrorHandling(
+        async (userId: Parameters<typeof getUserMessageCount>[1]) =>
+          await getUserMessageCount(repos.searchRepo, userId),
+        "getUserMessageCount"
+      ),
+      performAdvancedSearch: withErrorHandling(
+        async (
+          baseQuery: Parameters<typeof performAdvancedSearch>[1],
+          options: Parameters<typeof performAdvancedSearch>[2]
+        ) => await performAdvancedSearch(repos.searchRepo, baseQuery, options),
+        "performAdvancedSearch"
       ),
     },
   };

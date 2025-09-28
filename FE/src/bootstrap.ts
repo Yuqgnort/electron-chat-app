@@ -1,5 +1,5 @@
-import { s } from "node_modules/framer-motion/dist/types.d-Cjd591yU";
-import { createInMemoryEventBus, IEventBus } from "./core/application/eventbus";
+import { withErrorHandling } from "./core/application/error";
+import { createInMemoryEventBus } from "./core/application/eventbus";
 import {
   autoIndexMessageHandler,
   indexExistingMessages,
@@ -10,6 +10,7 @@ import {
   updateMsgIncomingHandler,
 } from "./core/application/handler/msg.hdl";
 import { createAppService } from "./core/application/services-facade";
+import { ISearchRepository } from "./core/domain/search/repo";
 import { EUserGender, IUserEntity } from "./core/domain/user/entity";
 import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
 import { ChatDb, initDb } from "./infratructure/indexDB/init";
@@ -19,8 +20,8 @@ import { createMsgRepoIdb } from "./infratructure/indexDB/repos/msg.repo";
 import { createPendingMsgRepoIdb } from "./infratructure/indexDB/repos/pending-msg.repo";
 import { createUserRepoIdb } from "./infratructure/indexDB/repos/user.repo";
 import { createSocketClient } from "./infratructure/socket";
-import { SQLiteService } from "./infratructure/sqlite/service";
-import { withErrorHandling } from "./core/application/error";
+import { SQLiteWorkerDB } from "./infratructure/sqlite/init";
+import { createSearchRepoSQLite } from "./infratructure/sqlite/repos";
 
 /////////////////////////
 
@@ -75,14 +76,15 @@ const handleSeedUsers = async (
 
 export async function bootstrap() {
   const db = await initDb();
-  const sqliteService = new SQLiteService();
-  await sqliteService.init();
+  const sqliteDb = new SQLiteWorkerDB();
+  await sqliteDb.init();
 
   const msgRepo = createMsgRepoIdb(db);
   const userRepo = createUserRepoIdb(db);
   const convRepo = createConvRepoIdb(db);
   const convPartRepo = createConvPartRepoIdb(db);
   const pendingMsgRepo = createPendingMsgRepoIdb(db);
+  const searchRepo = createSearchRepoSQLite(sqliteDb);
 
   await handleSeedUsers(db, userRepo);
 
@@ -102,8 +104,8 @@ export async function bootstrap() {
     socket
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
-  autoIndexMessageHandler(eventBus, sqliteService, userRepo);
-  indexExistingMessages(msgRepo, userRepo, sqliteService).catch(console.error);
+  autoIndexMessageHandler(eventBus, searchRepo, userRepo);
+  indexExistingMessages(msgRepo, userRepo, searchRepo);
 
   const service = createAppService(
     {
@@ -112,6 +114,7 @@ export async function bootstrap() {
       msgRepo,
       userRepo,
       pendingMsgRepo,
+      searchRepo,
     },
     eventBus,
     transactionManager,
@@ -123,10 +126,9 @@ export async function bootstrap() {
       ...service,
       resetChatDataKeepUsers: withErrorHandling(
         async (onSuccess?: Parameters<typeof resetChatDataKeepUsers>[2]) =>
-          await resetChatDataKeepUsers(db, sqliteService, onSuccess),
+          await resetChatDataKeepUsers(db, searchRepo, onSuccess),
         "resetChatDataKeepUsers"
       ),
-      search: sqliteService,
     },
     socket,
     eventBus,
@@ -137,7 +139,9 @@ export async function bootstrap() {
       convRepo,
       convPartRepo,
       pendingMsgRepo,
+      searchRepo,
     },
+    sqliteDb,
   };
 }
 
@@ -152,12 +156,12 @@ export interface ResetResult {
 
 export async function resetChatDataKeepUsers(
   db: ChatDb,
-  searchDb: SQLiteService,
+  searchRepo: ISearchRepository,
   onSuccess?: () => void
 ): Promise<ResetResult> {
   try {
-    const indexStats = await searchDb.getIndexStats();
-    await searchDb.clearIndex();
+    const indexStats = await searchRepo.getIndexStats();
+    await searchRepo.clearIndex();
     await db.transaction(
       "rw",
       [db.messages, db.conversations, db.conversationParts, db.pendingMessages],

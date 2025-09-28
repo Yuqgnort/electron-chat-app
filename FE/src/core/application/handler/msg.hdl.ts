@@ -5,7 +5,7 @@ import { IMsgRepo } from "@/core/domain/msg/repo";
 import { IPendingMsgEntity } from "@/core/domain/pending-msg/entity";
 import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
 import { IUserRepo } from "@/core/domain/user/repo";
-import { SQLiteService } from "@/infratructure/sqlite/service";
+import { ISearchRepository } from "@/core/domain/search/repo";
 import { assertExists, withErrorHandling } from "../error";
 import { IEventBus } from "../eventbus";
 import { createConvWithParticipants } from "../services";
@@ -319,7 +319,7 @@ async function retrySinglePendingMsg(
 
 export const autoIndexMessageHandler = (
   eventBus: IEventBus,
-  sqliteService: SQLiteService,
+  searchRepo: ISearchRepository,
   userRepo: IUserRepo
 ) => {
   eventBus.subscribe(
@@ -327,7 +327,7 @@ export const autoIndexMessageHandler = (
     withErrorHandling(async ({ payload: msg }) => {
       try {
         // Check if message is already indexed to avoid duplicates
-        const isAlreadyIndexed = await sqliteService.isMessageIndexed(msg.id);
+        const isAlreadyIndexed = await searchRepo.isMessageIndexed(msg.id);
         if (isAlreadyIndexed) {
           console.log(`Message ${msg.id} already indexed, skipping`);
           return;
@@ -336,13 +336,14 @@ export const autoIndexMessageHandler = (
         const sender = await userRepo.getById(msg.senderId);
         const senderName = sender?.userName || "Unknown";
 
-        await sqliteService.indexMessage(
-          msg.id,
-          msg.content,
+        await searchRepo.indexMessage({
+          messageId: msg.id,
+          content: msg.content,
           senderName,
-          msg.conversationId,
-          msg.createdAt
-        );
+          senderId: msg.senderId,
+          conversationId: msg.conversationId,
+          createdAt: msg.createdAt,
+        });
 
         console.log(`Message ${msg.id} indexed in FTS`);
       } catch (error) {
@@ -355,7 +356,7 @@ export const autoIndexMessageHandler = (
 export const indexExistingMessages = async (
   msgRepo: IMsgRepo,
   userRepo: IUserRepo,
-  sqliteService: SQLiteService
+  searchRepo: ISearchRepository
 ) => {
   try {
     console.log("Checking for unindexed messages...");
@@ -367,7 +368,7 @@ export const indexExistingMessages = async (
     }
 
     // Get already indexed message IDs
-    const indexedIds = await sqliteService.getIndexedMessageIds();
+    const indexedIds = await searchRepo.getIndexedMessageIds();
     const indexedIdsSet = new Set(indexedIds);
 
     // Filter out already indexed messages
@@ -390,13 +391,14 @@ export const indexExistingMessages = async (
         const sender = await userRepo.getById(msg.senderId);
         const senderName = sender?.userName || "Unknown";
 
-        await sqliteService.indexMessage(
-          msg.id,
-          msg.content,
+        await searchRepo.indexMessage({
+          messageId: msg.id,
+          content: msg.content,
           senderName,
-          msg.conversationId,
-          new Date(msg.createdAt).toISOString()
-        );
+          senderId: msg.senderId,
+          conversationId: msg.conversationId,
+          createdAt: msg.createdAt,
+        });
 
         indexed++;
 

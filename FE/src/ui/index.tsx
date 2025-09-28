@@ -5,7 +5,7 @@ import { App } from "./App";
 import { AppProvider } from "./context";
 import "./index.css";
 
-bootstrap().then(({ db, eventBus, service, socket, repos, sqliteService }) => {
+bootstrap().then(({ db, eventBus, service, socket, repos, sqliteDb }) => {
   const root = createRoot(document.body);
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -23,7 +23,7 @@ bootstrap().then(({ db, eventBus, service, socket, repos, sqliteService }) => {
       service={service}
       socket={socket}
       repos={repos}
-      sqliteService={sqliteService}
+      sqliteDb={sqliteDb}
     >
       <QueryClientProvider client={queryClient}>
         <App />

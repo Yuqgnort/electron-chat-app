@@ -8,7 +8,6 @@ import { formatDistanceToNow } from "date-fns";
 import { Filter, MessageSquare, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../core/Button";
-import { Checkbox } from "../core/CheckBox";
 import { Input } from "../core/Input";
 import { ScrollArea } from "../core/ScrollArea";
 import {
@@ -18,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../core/Select";
+import { Checkbox } from "../core/Checkbox";
 
 interface SearchBoxProps {
   isOpen: boolean;

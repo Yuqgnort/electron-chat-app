@@ -29,6 +29,8 @@ export interface ISearchQuery {
   userFilter?: EUserFilter;
   userId?: TID; // For SPECIFIC_USER or EXCLUDE_USER
   senderName?: string; // Alternative to userId, search by name
+  excludeCurrentUserName?: string; // Exclude messages from current user (fallback)
+  excludeCurrentUserId?: TID; // Exclude messages from current user (preferred)
 }
 
 export interface ISearchResultItem {
@@ -86,6 +88,8 @@ export const createSearchQuery = (
     userFilter: options.userFilter || EUserFilter.ALL_USERS,
     userId: options.userId,
     senderName: options.senderName,
+    excludeCurrentUserName: options.excludeCurrentUserName,
+    excludeCurrentUserId: options.excludeCurrentUserId,
   };
 };
 

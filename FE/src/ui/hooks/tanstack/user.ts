@@ -28,3 +28,19 @@ export function useGetUsersWithIgnoreIds(
     queryFn: async () => await service.user.getAllUsersIgnore(ignoredIds),
   });
 }
+
+export function useGetUserById(service: TBootstrapReturn["service"]) {
+  return useMutation({
+    mutationKey: ["GET_USER_BY_ID"],
+    mutationFn: async (id: string) => {
+      if (!id) {
+        throw new Error("User ID is not provided");
+      }
+      const user = await service.user.getUserById(id);
+      if (!user) {
+        throw new Error(`User with ID ${id} not found`);
+      }
+      return user;
+    },
+  });
+}

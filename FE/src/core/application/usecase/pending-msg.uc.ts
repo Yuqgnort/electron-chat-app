@@ -4,7 +4,6 @@ import {
   IPendingMsgEntity,
 } from "@/core/domain/pending-msg/entity";
 import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
-import { IEventBus } from "../eventbus";
 import { assertExists, withErrorHandling } from "../error";
 
 /////////////////////

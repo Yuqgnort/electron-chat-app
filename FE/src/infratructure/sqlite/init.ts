@@ -48,4 +48,8 @@ export class SQLiteWorkerDB {
   async select(sql: string) {
     return this.sendPostMessage("select", { sql });
   }
+
+  async reset() {
+    return this.sendPostMessage("reset");
+  }
 }

@@ -125,8 +125,8 @@ export async function bootstrap() {
     service: {
       ...service,
       resetChatDataKeepUsers: withErrorHandling(
-        async (onSuccess?: Parameters<typeof resetChatDataKeepUsers>[2]) =>
-          await resetChatDataKeepUsers(db, searchRepo, onSuccess),
+        async (onSuccess?: Parameters<typeof resetChatDataKeepUsers>[3]) =>
+          await resetChatDataKeepUsers(db, searchRepo, sqliteDb, onSuccess),
         "resetChatDataKeepUsers"
       ),
     },
@@ -157,11 +157,13 @@ export interface ResetResult {
 export async function resetChatDataKeepUsers(
   db: ChatDb,
   searchRepo: ISearchRepository,
+  sqliteDb: SQLiteWorkerDB,
   onSuccess?: () => void
 ): Promise<ResetResult> {
   try {
     const indexStats = await searchRepo.getIndexStats();
     await searchRepo.clearIndex();
+    await sqliteDb.reset();
     await db.transaction(
       "rw",
       [db.messages, db.conversations, db.conversationParts, db.pendingMessages],

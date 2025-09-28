@@ -1,9 +1,11 @@
+import { useState, useCallback } from "react";
 import { useAppContext } from "@/ui/context";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
+import { useGetUserById } from "@/ui/hooks/tanstack/user";
+import { SearchResult } from "@/ui/hooks/useSearchMessages";
 import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, RefreshCcw, Trash } from "lucide-react";
-import { useState } from "react";
 import { Button } from "../core/Button";
 import {
   ContextMenu,
@@ -17,7 +19,6 @@ import { SearchBox } from "../Search";
 import { ConvList } from "./ConvList";
 import { CurrentUser } from "./CurrentUser";
 import { UserList } from "./UserList";
-import { SearchResult } from "@/ui/hooks/useSearchMessages";
 
 export enum SidebarTab {
   CONVERSATIONS = "conversations",
@@ -25,48 +26,48 @@ export enum SidebarTab {
 }
 
 export function Sidebar() {
-  const [activeTab, setActiveTab] = useState<SidebarTab>(
-    SidebarTab.CONVERSATIONS
-  );
+  const [activeTab, setActiveTab] = useState(SidebarTab.CONVERSATIONS);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const { socket, service } = useAppContext();
   const queryClient = useQueryClient();
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { setChatBoxState } = useChatWindowStore();
+  const { mutateAsync } = useGetUserById(service);
 
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setIsSearchOpen(false), []);
 
-  const closeSearch = () => {
-    setIsSearchOpen(false);
-  };
-
-  const logOut = () => {
+  const logOut = useCallback(() => {
     socket.disconnect();
     setCurrentUser(null);
     setChatBoxState({ receiverUser: null, conversationId: null });
     queryClient.clear();
-  };
+  }, [socket, setCurrentUser, setChatBoxState, queryClient]);
 
-  const handleMessageClick = (result: SearchResult) => {
-    // Navigate to the conversation and highlight the message
-    console.log("Navigate to message:", result);
-
-    // TODO: Implement navigation to specific message
-    // This could involve:
-    // 1. Opening the conversation
-    // 2. Scrolling to the specific message
-    // 3. Highlighting the message temporarily
-
-    setChatBoxState({
-      receiverUser: null, // Will be set when conversation loads
-      conversationId: result.conversation_id,
-    });
-  };
+  const handleMessageClick = useCallback(
+    async (result: SearchResult, temp: string) => {
+      if (!result.conversation_id || !result.sender_id) return;
+      try {
+        const receiverUser = await mutateAsync(result.sender_id);
+        setChatBoxState({
+          receiverUser,
+          conversationId: result.conversation_id,
+          highlightedMessageId: result.id,
+          highlightedMessageText: temp,
+        });
+        closeSearch();
+      } catch (error) {
+        console.error("Failed to fetch user:", error);
+      }
+    },
+    [mutateAsync, setChatBoxState, closeSearch]
+  );
 
   if (!currentUser) return null;
 
   return (
     <div className="w-100 bg-white border-r border-gray-200 flex flex-col">
+      {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <ContextMenu>
           <ContextMenuTrigger>
@@ -96,10 +97,14 @@ export function Sidebar() {
           <LogOut className="w-4 h-4 text-gray-600" />
         </Button>
       </div>
+
+      {/* Current user + search */}
       <CurrentUser
         isSearchOpen={isSearchOpen}
         setIsSearchOpen={setIsSearchOpen}
       />
+
+      {/* Content */}
       <div className="flex-1 overflow-hidden">
         {isSearchOpen ? (
           <SearchBox
@@ -109,7 +114,6 @@ export function Sidebar() {
           />
         ) : (
           <Tabs
-            defaultValue="conversations"
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as SidebarTab)}
           >

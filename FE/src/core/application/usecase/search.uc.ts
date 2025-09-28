@@ -19,9 +19,19 @@ import { assertExists, withErrorHandling } from "../error";
 export const performSearch = withErrorHandling(
   async (
     searchRepo: ISearchRepository,
-    query: ISearchQuery
+    query: ISearchQuery,
+    currentUserId?: string,
+    currentUserName?: string
   ): Promise<ISearchResult> => {
     assertExists(searchRepo, "searchRepo is required");
+
+    // Tự động thêm filter để loại bỏ tin nhắn của current user
+    // Ưu tiên dùng userId cho exact matching
+    if (currentUserId) {
+      query.excludeCurrentUserId = currentUserId;
+    } else if (currentUserName) {
+      query.excludeCurrentUserName = currentUserName;
+    }
 
     if (!isValidSearchQuery(query)) {
       throw new Error("Invalid search query");
@@ -36,7 +46,9 @@ export const searchInConversation = withErrorHandling(
   async (
     searchRepo: ISearchRepository,
     query: string,
-    conversationId: TID
+    conversationId: TID,
+    currentUserId?: string,
+    currentUserName?: string
   ): Promise<ISearchResult> => {
     assertExists(searchRepo, "searchRepo is required");
     assertExists(query, "query is required");
@@ -46,6 +58,8 @@ export const searchInConversation = withErrorHandling(
       type: ESearchType.FULL_TEXT,
       scope: ESearchScope.CURRENT_CONVERSATION,
       conversationId,
+      excludeCurrentUserId: currentUserId,
+      excludeCurrentUserName: currentUserName,
     });
 
     return searchRepo.search(searchQuery);
@@ -109,7 +123,9 @@ export const searchExactPhrase = withErrorHandling(
   async (
     searchRepo: ISearchRepository,
     phrase: string,
-    conversationId?: TID
+    conversationId?: TID,
+    currentUserId?: string,
+    currentUserName?: string
   ): Promise<ISearchResult> => {
     assertExists(searchRepo, "searchRepo is required");
     assertExists(phrase, "phrase is required");
@@ -120,6 +136,8 @@ export const searchExactPhrase = withErrorHandling(
         ? ESearchScope.CURRENT_CONVERSATION
         : ESearchScope.ALL_CONVERSATIONS,
       conversationId,
+      excludeCurrentUserId: currentUserId,
+      excludeCurrentUserName: currentUserName,
     });
 
     return searchRepo.search(searchQuery);
@@ -265,6 +283,7 @@ export const performAdvancedSearch = withErrorHandling(
       senderName?: string;
       conversationId?: TID;
       limit?: number;
+      currentUserName?: string;
     }
   ): Promise<ISearchResult> => {
     assertExists(searchRepo, "searchRepo is required");
@@ -282,6 +301,7 @@ export const performAdvancedSearch = withErrorHandling(
       userId: options.userId,
       senderName: options.senderName,
       limit: options.limit,
+      excludeCurrentUserName: options.currentUserName,
     });
 
     return searchRepo.search(searchQuery);

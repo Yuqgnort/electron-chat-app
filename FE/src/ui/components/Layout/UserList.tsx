@@ -25,6 +25,8 @@ export function UserList() {
       setChatBoxState({
         receiverUser: user,
         conversationId: convs ? convs.id : null,
+        highlightedMessageId: null,
+        highlightedMessageText: null,
       });
     } catch (error) {
       throw error;

@@ -202,16 +202,33 @@ export function createAppService(
     },
     search: {
       performSearch: withErrorHandling(
-        async (query: Parameters<typeof performSearch>[1]) =>
-          await performSearch(repos.searchRepo, query),
+        async (
+          query: Parameters<typeof performSearch>[1],
+          currentUserId?: Parameters<typeof performSearch>[2],
+          currentUserName?: Parameters<typeof performSearch>[3]
+        ) =>
+          await performSearch(
+            repos.searchRepo,
+            query,
+            currentUserId,
+            currentUserName
+          ),
         "performSearch"
       ),
       searchInConversation: withErrorHandling(
         async (
           query: Parameters<typeof searchInConversation>[1],
-          conversationId: Parameters<typeof searchInConversation>[2]
+          conversationId: Parameters<typeof searchInConversation>[2],
+          currentUserId?: Parameters<typeof searchInConversation>[3],
+          currentUserName?: Parameters<typeof searchInConversation>[4]
         ) =>
-          await searchInConversation(repos.searchRepo, query, conversationId),
+          await searchInConversation(
+            repos.searchRepo,
+            query,
+            conversationId,
+            currentUserId,
+            currentUserName
+          ),
         "searchInConversation"
       ),
       searchMessagesByUser: withErrorHandling(
@@ -245,8 +262,17 @@ export function createAppService(
       searchExactPhrase: withErrorHandling(
         async (
           phrase: Parameters<typeof searchExactPhrase>[1],
-          conversationId?: Parameters<typeof searchExactPhrase>[2]
-        ) => await searchExactPhrase(repos.searchRepo, phrase, conversationId),
+          conversationId?: Parameters<typeof searchExactPhrase>[2],
+          currentUserId?: Parameters<typeof searchExactPhrase>[3],
+          currentUserName?: Parameters<typeof searchExactPhrase>[4]
+        ) =>
+          await searchExactPhrase(
+            repos.searchRepo,
+            phrase,
+            conversationId,
+            currentUserId,
+            currentUserName
+          ),
         "searchExactPhrase"
       ),
       getSearchSuggestions: withErrorHandling(

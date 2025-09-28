@@ -22,7 +22,7 @@ import { Checkbox } from "../core/Checkbox";
 interface SearchBoxProps {
   isOpen: boolean;
   onClose: () => void;
-  onMessageClick?: (result: SearchResult) => void;
+  onMessageClick?: (result: SearchResult, temp: string) => void;
 }
 
 export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
@@ -65,8 +65,8 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  const handleClickMessage = (result: SearchResult) => {
-    onMessageClick?.(result);
+  const handleClickMessage = (result: SearchResult, tempt: string) => {
+    onMessageClick?.(result, tempt);
     onClose();
   };
 
@@ -83,6 +83,33 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
         part
       )
     );
+  };
+
+  const getSnippet = (text: string, query: string, contextLength = 50) => {
+    if (!query.trim())
+      return (
+        text.slice(0, contextLength * 2) +
+        (text.length > contextLength * 2 ? "..." : "")
+      );
+
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const index = lowerText.indexOf(lowerQuery);
+
+    if (index === -1) {
+      return (
+        text.slice(0, contextLength * 2) +
+        (text.length > contextLength * 2 ? "..." : "")
+      );
+    }
+
+    const start = Math.max(0, index - contextLength);
+    const end = Math.min(text.length, index + query.length + contextLength);
+
+    const prefix = start > 0 ? "..." : "";
+    const suffix = end < text.length ? "..." : "";
+
+    return prefix + text.slice(start, end) + suffix;
   };
 
   const formatDate = (date: string) => {
@@ -135,7 +162,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
             <X className="w-4 h-4" />
           </Button>
         </div>
-
         {isFilterVisible && (
           <div className="mt-3 flex items-center p-3 bg-muted rounded-lg space-x-2">
             <div className="flex items-center space-x-2">
@@ -219,7 +245,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
               {activeResults.map((msg) => (
                 <div
                   key={`${msg.id}-${msg.conversation_id}`}
-                  onClick={() => handleClickMessage(msg)}
+                  onClick={() => handleClickMessage(msg, searchParams.query)}
                   className="p-4 hover:bg-muted cursor-pointer transition-colors"
                 >
                   <div className="flex items-start space-x-3">
@@ -230,15 +256,18 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-sm">
+                        <span className="font-normal text-gray-500 text-sm">
                           {msg.sender_name}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {formatDate(msg.created_at)}
                         </span>
                       </div>
-                      <p className="text-sm leading-relaxed">
-                        {highlightText(msg.content, searchParams.query)}
+                      <p className="text-sm  line-clamp-2">
+                        {highlightText(
+                          getSnippet(msg.content, searchParams.query),
+                          searchParams.query
+                        )}
                       </p>
                     </div>
                   </div>

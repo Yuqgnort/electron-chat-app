@@ -71,6 +71,9 @@ export interface ISearchRepository {
   optimizeIndex(): Promise<void>;
   validateIndex(): Promise<boolean>;
 
+  // Migration operations
+  migrateSenderIds(userRepo: any): Promise<void>;
+
   // Raw SQL access (for advanced operations)
   executeQuery(sql: string): Promise<any>;
   selectQuery(sql: string): Promise<any[]>;

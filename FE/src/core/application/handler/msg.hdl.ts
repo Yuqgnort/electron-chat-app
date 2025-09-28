@@ -328,6 +328,7 @@ export const autoIndexMessageHandler = (
       try {
         // Check if message is already indexed to avoid duplicates
         const isAlreadyIndexed = await searchRepo.isMessageIndexed(msg.id);
+
         if (isAlreadyIndexed) {
           console.log(`Message ${msg.id} already indexed, skipping`);
           return;

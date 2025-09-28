@@ -7,11 +7,10 @@ import {
   TGetMessagesByConvIdQueryData,
   useGetMessagesByConvId,
 } from "@/ui/hooks/tanstack/msg";
-import { useScrollToBottom } from "@/ui/hooks/useScrollToBottom";
-import { useStickToBottomOnLoad } from "@/ui/hooks/useStickToBottomOnLoad";
 import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useRef } from "react";
 import { MessageItem } from "./MessageItem";
 
 type TMessageListProps = {
@@ -102,19 +101,27 @@ const addNewMessageToLastPageCache = (
 export function MessageList({ receiverUserId: userId }: TMessageListProps) {
   const queryClient = useQueryClient();
   const { service, eventBus } = useAppContext();
-
   const { currentUser } = useCurrentUserStore();
   const { chatBoxState } = useChatWindowStore();
 
   const {
-    data: messages,
+    data: messages = [],
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
   } = useGetMessagesByConvId(service, chatBoxState.conversationId);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 64,
+    overscan: 5,
+    getItemKey: (index) => messages[index]?.localId,
+  });
+
+  const measureElement = rowVirtualizer.measureElement;
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
@@ -129,44 +136,58 @@ export function MessageList({ receiverUserId: userId }: TMessageListProps) {
 
   useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
     addNewMessageToLastPageCache(payload, queryClient, payload.conversationId);
+    requestAnimationFrame(() => {
+      const totalSize = rowVirtualizer.getTotalSize();
+      parentRef.current?.scrollTo({ top: totalSize + 16 });
+    });
   });
 
-  useScrollToBottom({
-    containerRef,
-    dependencies: [messages],
-  });
+  useEffect(() => {
+    if (messages.length > 0) {
+      requestAnimationFrame(() => {
+        const totalSize = rowVirtualizer.getTotalSize();
+        parentRef.current?.scrollTo({ top: totalSize + 16 });
+      });
+    }
+  }, [messages.length, rowVirtualizer]);
 
-  useStickToBottomOnLoad({
-    containerRef,
-    deps: [chatBoxState.conversationId],
-  });
-
-  if (!messages || !currentUser) return null;
+  if (!currentUser) return null;
 
   return (
     <div
-      ref={containerRef}
-      className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50"
+      ref={parentRef}
+      className="flex-1 h-full px-6 py-4 bg-gray-50 overflow-y-auto"
       onScroll={handleScroll}
     >
-      {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-gray-500">
-            No messages yet. Start the conversation!
-          </p>
-        </div>
-      ) : (
-        <>
-          {messages.map((message) => (
-            <MessageItem
-              message={message}
+      <div
+        style={{
+          height: rowVirtualizer.getTotalSize(),
+          width: "100%",
+          position: "relative",
+        }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const message = messages[virtualRow.index];
+          return (
+            <div
               key={message.localId}
-              isCurrentUser={message.senderId === currentUser.id}
-            />
-          ))}
-        </>
-      )}
-      <div ref={messagesEndRef} />
+              ref={(el) => {
+                if (el) measureElement(el);
+              }}
+              data-index={virtualRow.index}
+              className="absolute top-0 left-0 w-full py-0.5"
+              style={{
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <MessageItem
+                message={message}
+                isCurrentUser={message.senderId === currentUser.id}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -25,37 +25,52 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     id: row.id,
     content: row.content,
     senderName: row.sender_name,
-    senderId: row.sender_name,
+    senderId: row.sender_id, // Sử dụng sender_id thực tế từ database
     conversationId: row.conversation_id,
     createdAt: parseTimestamp(row.created_at),
     rank: row.rank,
   });
 
   const buildUserFilterClause = (query: ISearchQuery): string => {
+    let clause = "";
+
+    // Luôn loại bỏ tin nhắn của current user - ưu tiên dùng excludeCurrentUserId nếu có
+    if (query.excludeCurrentUserId) {
+      clause += ` AND sender_id != '${sanitizeString(query.excludeCurrentUserId)}'`;
+    } else if (query.excludeCurrentUserName) {
+      clause += ` AND sender_name != '${sanitizeString(query.excludeCurrentUserName)}'`;
+    }
+
     if (!query.userFilter || query.userFilter === EUserFilter.ALL_USERS) {
-      return "";
+      return clause;
     }
 
     if (query.userFilter === EUserFilter.SPECIFIC_USER) {
-      if (query.senderName) {
-        return ` AND sender_name = '${sanitizeString(query.senderName)}'`;
+      // Ưu tiên dùng userId cho exact matching
+      if (query.userId) {
+        clause += ` AND sender_id = '${sanitizeString(query.userId)}'`;
+      } else if (query.senderName) {
+        clause += ` AND sender_name = '${sanitizeString(query.senderName)}'`;
       }
     }
 
     if (query.userFilter === EUserFilter.EXCLUDE_USER) {
-      if (query.senderName) {
-        return ` AND sender_name != '${sanitizeString(query.senderName)}'`;
+      // Ưu tiên dùng userId cho exact matching
+      if (query.userId) {
+        clause += ` AND sender_id != '${sanitizeString(query.userId)}'`;
+      } else if (query.senderName) {
+        clause += ` AND sender_name != '${sanitizeString(query.senderName)}'`;
       }
     }
 
-    return "";
+    return clause;
   };
 
   const performFullTextSearch = async (
     query: ISearchQuery
   ): Promise<ISearchResultItem[]> => {
     let sql = `
-      SELECT id, content, sender_name, conversation_id, created_at, rank
+      SELECT id, content, sender_name, sender_id, conversation_id, created_at, rank
       FROM messages_fts 
       WHERE messages_fts MATCH '${sanitizeString(query.query)}*'
     `;
@@ -68,7 +83,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
 
     sql += buildUserFilterClause(query);
-    sql += ` ORDER BY rank LIMIT ${query.limit || 50}`;
+    sql += ` ORDER BY created_at DESC LIMIT ${query.limit || 50}`;
 
     const rawResults = await db.select(sql);
     return mapSQLiteRows(rawResults as any[], mapToSearchResultItem);
@@ -78,7 +93,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     query: ISearchQuery
   ): Promise<ISearchResultItem[]> => {
     let sql = `
-      SELECT id, content, sender_name, conversation_id, created_at, rank
+      SELECT id, content, sender_name, sender_id, conversation_id, created_at, rank
       FROM messages_fts 
       WHERE messages_fts MATCH '"${sanitizeString(query.query)}"'
     `;
@@ -91,7 +106,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
 
     sql += buildUserFilterClause(query);
-    sql += ` ORDER BY rank LIMIT ${query.limit || 50}`;
+    sql += ` ORDER BY created_at DESC LIMIT ${query.limit || 50}`;
 
     const rawResults = await db.select(sql);
     return mapSQLiteRows(rawResults as any[], mapToSearchResultItem);
@@ -152,7 +167,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     ): Promise<ISearchResultItem[]> {
       const cleanPhrase = sanitizeString(phrase);
       let sql = `
-        SELECT id, content, sender_name, conversation_id, created_at, rank
+        SELECT id, content, sender_name, sender_id, conversation_id, created_at, rank
         FROM messages_fts 
         WHERE messages_fts MATCH '"${cleanPhrase}"'
       `;
@@ -161,7 +176,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         sql += ` AND conversation_id = '${sanitizeString(conversationId)}'`;
       }
 
-      sql += ` ORDER BY rank LIMIT 50`;
+      sql += ` ORDER BY created_at DESC LIMIT 50`;
 
       const rawResults = await db.select(sql);
       return mapSQLiteRows(rawResults as any[], mapToSearchResultItem);
@@ -236,7 +251,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       limit?: number
     ): Promise<ISearchResultItem[]> {
       let sql = `
-        SELECT id, content, sender_name, conversation_id, created_at
+        SELECT id, content, sender_name, sender_id, conversation_id, created_at
         FROM messages_fts 
         WHERE sender_name = '${sanitizeString(userId)}'
       `;
@@ -261,9 +276,11 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       ]);
 
       const sql = `
-        INSERT INTO messages_fts(id, content, sender_name, conversation_id, created_at) 
-        VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderName)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}')
+        INSERT INTO messages_fts(id, content, sender_name, sender_id, conversation_id, created_at) 
+        VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderName)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}')
       `;
+
+      console.log("Indexing message:", sql);
 
       await db.exec(sql);
     },
@@ -280,9 +297,18 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         "senderName",
       ]);
 
+      const updateFields = [
+        `content = '${sanitizeString(content)}'`,
+        `sender_name = '${sanitizeString(senderName)}'`,
+      ];
+
+      if (senderId) {
+        updateFields.push(`sender_id = '${sanitizeString(senderId)}'`);
+      }
+
       const sql = `
         UPDATE messages_fts 
-        SET content = '${sanitizeString(content)}', sender_name = '${sanitizeString(senderName)}'
+        SET ${updateFields.join(", ")}
         WHERE id = '${messageId}'
       `;
 
@@ -402,6 +428,55 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         return true;
       } catch (error) {
         return false;
+      }
+    },
+
+    // Migration helper để thêm sender_id cho existing messages
+    async migrateSenderIds(userRepo: any): Promise<void> {
+      try {
+        // Lấy tất cả messages không có sender_id
+        const messagesWithoutSenderId = (await db.select(`
+          SELECT id, sender_name 
+          FROM messages_fts 
+          WHERE sender_id IS NULL OR sender_id = ''
+        `)) as any[];
+
+        console.log(
+          `Found ${messagesWithoutSenderId.length} messages to migrate`
+        );
+
+        // Lấy mapping của tất cả users
+        const users = await userRepo.getAll();
+        const userNameToIdMap = new Map();
+        users?.forEach((user: any) => {
+          userNameToIdMap.set(user.displayName, user.id);
+          userNameToIdMap.set(user.name, user.id);
+          userNameToIdMap.set(user.userName, user.id);
+        });
+
+        let updatedCount = 0;
+        for (const msg of messagesWithoutSenderId) {
+          const senderId = userNameToIdMap.get(msg.sender_name);
+          if (senderId) {
+            await db.exec(`
+              UPDATE messages_fts 
+              SET sender_id = '${sanitizeString(senderId)}'
+              WHERE id = '${msg.id}'
+            `);
+            updatedCount++;
+          } else {
+            console.warn(
+              `Could not find user ID for sender: ${msg.sender_name}`
+            );
+          }
+        }
+
+        console.log(
+          `Successfully migrated ${updatedCount} messages with sender_id`
+        );
+      } catch (error) {
+        console.error("Migration failed:", error);
+        throw error;
       }
     },
 

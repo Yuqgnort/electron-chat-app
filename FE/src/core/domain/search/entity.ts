@@ -75,12 +75,23 @@ export interface IMessageIndexData {
 }
 
 // Factory functions
+
+export const createNormalizeSearchString = (str: string): string => {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+};
+
 export const createSearchQuery = (
   query: string,
   options: Partial<Omit<ISearchQuery, "query">> = {}
 ): ISearchQuery => {
   return {
-    query: query.trim(),
+    query: createNormalizeSearchString(query),
     type: options.type || ESearchType.FULL_TEXT,
     scope: options.scope || ESearchScope.ALL_CONVERSATIONS,
     conversationId: options.conversationId,
@@ -90,6 +101,13 @@ export const createSearchQuery = (
     senderName: options.senderName,
     excludeCurrentUserName: options.excludeCurrentUserName,
     excludeCurrentUserId: options.excludeCurrentUserId,
+  };
+};
+
+export const normalizeSearchQuery = (query: ISearchQuery): ISearchQuery => {
+  return {
+    ...query,
+    query: createNormalizeSearchString(query.query),
   };
 };
 

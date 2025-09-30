@@ -419,6 +419,13 @@ async function retrySinglePendingMsg(
   );
 }
 
+const normalizeForSearch = (s: string) =>
+  s
+    .normalize("NFD") // tách dấu
+    .replace(/[\u0300-\u036f]/g, "") // xoá dấu
+    .replace(/đ/g, "d") // đ → d
+    .replace(/Đ/g, "D");
+
 export const autoIndexMessageHandler = (
   eventBus: IEventBus,
   searchRepo: ISearchRepository,
@@ -450,7 +457,7 @@ export const autoIndexMessageHandler = (
 
         await searchRepo.indexMessage({
           messageId: msg.id,
-          content: msg.content,
+          content: normalizeForSearch(msg.content),
           senderName,
           senderId: msg.senderId,
           conversationId: msg.conversationId,
@@ -507,7 +514,7 @@ export const indexExistingMessages = async (
 
         await searchRepo.indexMessage({
           messageId: msg.id,
-          content: msg.content,
+          content: normalizeForSearch(msg.content),
           senderName,
           senderId: msg.senderId,
           conversationId: msg.conversationId,

@@ -6,8 +6,9 @@ import {
 } from "@/ui/hooks/useSearchMessages";
 import { formatDistanceToNow } from "date-fns";
 import { Filter, MessageSquare, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { JSX, useEffect, useRef, useState } from "react";
 import { Button } from "../core/Button";
+import { Checkbox } from "../core/Checkbox";
 import { Input } from "../core/Input";
 import { ScrollArea } from "../core/ScrollArea";
 import {
@@ -17,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../core/Select";
-import { Checkbox } from "../core/Checkbox";
 
 interface SearchBoxProps {
   isOpen: boolean;
@@ -61,67 +61,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
       debouncedSearchParams.isExactPhrase,
   });
 
-  useEffect(() => {
-    if (isOpen) inputRef.current?.focus();
-  }, [isOpen]);
-
-  const handleClickMessage = (result: SearchResult, tempt: string) => {
-    onMessageClick?.(result, tempt);
-    onClose();
-  };
-
-  const highlightText = (text: string, query: string) => {
-    if (!query.trim()) return text;
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`(${escaped})`, "gi");
-    return text.split(re).map((part, i) =>
-      i % 2 === 1 ? (
-        <mark key={i} className="bg-yellow-200 px-1 rounded">
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    );
-  };
-
-  const getSnippet = (text: string, query: string, contextLength = 50) => {
-    if (!query.trim())
-      return (
-        text.slice(0, contextLength * 2) +
-        (text.length > contextLength * 2 ? "..." : "")
-      );
-
-    const lowerText = text.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    const index = lowerText.indexOf(lowerQuery);
-
-    if (index === -1) {
-      return (
-        text.slice(0, contextLength * 2) +
-        (text.length > contextLength * 2 ? "..." : "")
-      );
-    }
-
-    const start = Math.max(0, index - contextLength);
-    const end = Math.min(text.length, index + query.length + contextLength);
-
-    const prefix = start > 0 ? "..." : "";
-    const suffix = end < text.length ? "..." : "";
-
-    return prefix + text.slice(start, end) + suffix;
-  };
-
-  const formatDate = (date: string) => {
-    const timestamp = Number(date);
-    const parsed = Number.isFinite(timestamp)
-      ? new Date(timestamp)
-      : new Date(date);
-    return formatDistanceToNow(parsed, { addSuffix: true });
-  };
-
-  if (!isOpen) return null;
-
   const activeResults = debouncedSearchParams.isExactPhrase
     ? exactPhraseResults
     : fuzzyResults;
@@ -132,6 +71,100 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const hasResults = activeResults.length > 0;
   const isEmpty =
     !hasResults && !isFetching && !!debouncedSearchParams.query.trim();
+
+  console.log(activeResults);
+
+  const handleClickMessage = (result: SearchResult, tempt: string) => {
+    onMessageClick?.(result, tempt);
+    onClose();
+  };
+
+  function normalizeForSearch(str: string): string {
+    return str
+      .toLowerCase()
+      .normalize("NFD") // tách dấu
+      .replace(/[\u0300-\u036f]/g, "") // bỏ dấu
+      .replace(/đ/g, "d")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // tạo mapping từ normalize sang text gốc
+  function buildMapping(original: string) {
+    const mapping: number[] = [];
+    const normalized = [];
+
+    let normIndex = 0;
+    for (let i = 0; i < original.length; i++) {
+      const c = original[i];
+      const normC = c
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d");
+
+      for (let j = 0; j < normC.length; j++) {
+        mapping[normIndex++] = i; // vị trí này trong normalize thuộc về original[i]
+        normalized.push(normC[j]);
+      }
+    }
+    return { normStr: normalized.join(""), mapping };
+  }
+
+  function highlight(text: string, keyword: string): JSX.Element {
+    if (!keyword) return <>{text}</>;
+
+    const { normStr, mapping } = buildMapping(text);
+    const normKw = normalizeForSearch(keyword);
+
+    const elements: JSX.Element[] = [];
+    let lastOriginalIdx = 0;
+    let key = 0;
+
+    let idx = normStr.indexOf(normKw);
+    while (idx !== -1) {
+      const startOrig = mapping[idx];
+      const endOrig = mapping[idx + normKw.length - 1] + 1;
+
+      // phần trước match
+      if (startOrig > lastOriginalIdx) {
+        elements.push(
+          <span key={key++}>{text.slice(lastOriginalIdx, startOrig)}</span>
+        );
+      }
+
+      // highlight
+      elements.push(
+        <mark key={key++} className="bg-yellow-200">
+          {text.slice(startOrig, endOrig)}
+        </mark>
+      );
+
+      lastOriginalIdx = endOrig;
+      idx = normStr.indexOf(normKw, idx + normKw.length);
+    }
+
+    // phần còn lại
+    if (lastOriginalIdx < text.length) {
+      elements.push(<span key={key++}>{text.slice(lastOriginalIdx)}</span>);
+    }
+
+    return <>{elements}</>;
+  }
+
+  const formatDate = (date: string) => {
+    const timestamp = Number(date);
+    const parsed = Number.isFinite(timestamp)
+      ? new Date(timestamp)
+      : new Date(date);
+    return formatDistanceToNow(parsed, { addSuffix: true });
+  };
+
+  useEffect(() => {
+    if (isOpen) inputRef.current?.focus();
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="flex flex-col h-full">
@@ -246,10 +279,10 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
                 <div
                   key={`${msg.id}-${msg.conversation_id}`}
                   onClick={() => handleClickMessage(msg, searchParams.query)}
-                  className="p-4 hover:bg-muted cursor-pointer transition-colors"
+                  className="p-4 hover:bg-blue-100 cursor-pointer transition-colors"
                 >
                   <div className="flex items-start space-x-3">
-                    <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-medium">
                         {msg.sender_name.charAt(0).toUpperCase()}
                       </span>
@@ -264,10 +297,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
                         </span>
                       </div>
                       <p className="text-sm  line-clamp-2">
-                        {highlightText(
-                          getSnippet(msg.content, searchParams.query),
-                          searchParams.query
-                        )}
+                        {highlight(msg.content, searchParams.query)}
                       </p>
                     </div>
                   </div>

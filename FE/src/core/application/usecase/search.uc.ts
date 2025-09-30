@@ -1,14 +1,13 @@
 import {
+  ESearchScope,
+  ESearchType,
+  EUserFilter,
+  IMessageIndexData,
   ISearchQuery,
   ISearchResult,
-  IAutocompleteSuggestion,
-  IIndexStats,
-  IMessageIndexData,
-  ESearchType,
-  ESearchScope,
-  EUserFilter,
   createSearchQuery,
   isValidSearchQuery,
+  normalizeSearchQuery,
 } from "@/core/domain/search/entity";
 import { ISearchRepository } from "@/core/domain/search/repo";
 import { TID } from "@/core/domain/type";
@@ -25,8 +24,6 @@ export const performSearch = withErrorHandling(
   ): Promise<ISearchResult> => {
     assertExists(searchRepo, "searchRepo is required");
 
-    // Tự động thêm filter để loại bỏ tin nhắn của current user
-    // Ưu tiên dùng userId cho exact matching
     if (currentUserId) {
       query.excludeCurrentUserId = currentUserId;
     } else if (currentUserName) {
@@ -36,8 +33,7 @@ export const performSearch = withErrorHandling(
     if (!isValidSearchQuery(query)) {
       throw new Error("Invalid search query");
     }
-
-    return searchRepo.search(query);
+    return searchRepo.search(normalizeSearchQuery(query));
   },
   "performSearch"
 );
@@ -62,7 +58,7 @@ export const searchInConversation = withErrorHandling(
       excludeCurrentUserName: currentUserName,
     });
 
-    return searchRepo.search(searchQuery);
+    return searchRepo.search(normalizeSearchQuery(searchQuery));
   },
   "searchInConversation"
 );
@@ -145,44 +141,44 @@ export const searchExactPhrase = withErrorHandling(
   "searchExactPhrase"
 );
 
-export const getSearchSuggestions = withErrorHandling(
-  async (
-    searchRepo: ISearchRepository,
-    partialQuery: string,
-    limit: number = 10
-  ): Promise<IAutocompleteSuggestion[]> => {
-    assertExists(searchRepo, "searchRepo is required");
+// export const getSearchSuggestions = withErrorHandling(
+//   async (
+//     searchRepo: ISearchRepository,
+//     partialQuery: string,
+//     limit: number = 10
+//   ): Promise<IAutocompleteSuggestion[]> => {
+//     assertExists(searchRepo, "searchRepo is required");
 
-    if (!partialQuery.trim()) return [];
+//     if (!partialQuery.trim()) return [];
 
-    return searchRepo.getAutocompleteSuggestions(partialQuery, limit);
-  },
-  "getSearchSuggestions"
-);
+//     return searchRepo.getAutocompleteSuggestions(partialQuery, limit);
+//   },
+//   "getSearchSuggestions"
+// );
 
-export const getUserMessages = withErrorHandling(
-  async (
-    searchRepo: ISearchRepository,
-    userId: TID,
-    conversationId?: TID,
-    limit: number = 50
-  ) => {
-    assertExists(searchRepo, "searchRepo is required");
-    assertExists(userId, "userId is required");
+// export const getUserMessages = withErrorHandling(
+//   async (
+//     searchRepo: ISearchRepository,
+//     userId: TID,
+//     conversationId?: TID,
+//     limit: number = 50
+//   ) => {
+//     assertExists(searchRepo, "searchRepo is required");
+//     assertExists(userId, "userId is required");
 
-    return searchRepo.getUserMessages(userId, conversationId, limit);
-  },
-  "getUserMessages"
-);
+//     return searchRepo.getUserMessages(userId, conversationId, limit);
+//   },
+//   "getUserMessages"
+// );
 
-export const getActiveUsers = withErrorHandling(
-  async (searchRepo: ISearchRepository, conversationId?: TID) => {
-    assertExists(searchRepo, "searchRepo is required");
+// export const getActiveUsers = withErrorHandling(
+//   async (searchRepo: ISearchRepository, conversationId?: TID) => {
+//     assertExists(searchRepo, "searchRepo is required");
 
-    return searchRepo.getActiveUsers(conversationId);
-  },
-  "getActiveUsers"
-);
+//     return searchRepo.getActiveUsers(conversationId);
+//   },
+//   "getActiveUsers"
+// );
 
 export const indexMessage = withErrorHandling(
   async (
@@ -243,14 +239,13 @@ export const bulkIndexMessages = withErrorHandling(
   "bulkIndexMessages"
 );
 
-export const getSearchStats = withErrorHandling(
-  async (searchRepo: ISearchRepository): Promise<IIndexStats> => {
-    assertExists(searchRepo, "searchRepo is required");
-
-    return searchRepo.getIndexStats();
-  },
-  "getSearchStats"
-);
+// export const getSearchStats = withErrorHandling(
+//   async (searchRepo: ISearchRepository): Promise<IIndexStats> => {
+//     assertExists(searchRepo, "searchRepo is required");
+//     return searchRepo.getIndexStats();
+//   },
+//   "getSearchStats"
+// );
 
 export const isMessageIndexed = withErrorHandling(
   async (searchRepo: ISearchRepository, messageId: TID): Promise<boolean> => {
@@ -266,45 +261,44 @@ export const getUserMessageCount = withErrorHandling(
   async (searchRepo: ISearchRepository, userId: TID): Promise<number> => {
     assertExists(searchRepo, "searchRepo is required");
     assertExists(userId, "userId is required");
-
     return searchRepo.getUserMessageCount(userId);
   },
   "getUserMessageCount"
 );
 
-export const performAdvancedSearch = withErrorHandling(
-  async (
-    searchRepo: ISearchRepository,
-    baseQuery: string,
-    options: {
-      exactPhrase?: boolean;
-      userFilter?: EUserFilter;
-      userId?: TID;
-      senderName?: string;
-      conversationId?: TID;
-      limit?: number;
-      currentUserName?: string;
-    }
-  ): Promise<ISearchResult> => {
-    assertExists(searchRepo, "searchRepo is required");
-    assertExists(baseQuery, "baseQuery is required");
+// export const performAdvancedSearch = withErrorHandling(
+//   async (
+//     searchRepo: ISearchRepository,
+//     baseQuery: string,
+//     options: {
+//       exactPhrase?: boolean;
+//       userFilter?: EUserFilter;
+//       userId?: TID;
+//       senderName?: string;
+//       conversationId?: TID;
+//       limit?: number;
+//       currentUserName?: string;
+//     }
+//   ): Promise<ISearchResult> => {
+//     assertExists(searchRepo, "searchRepo is required");
+//     assertExists(baseQuery, "baseQuery is required");
 
-    const searchQuery = createSearchQuery(baseQuery, {
-      type: options.exactPhrase
-        ? ESearchType.EXACT_PHRASE
-        : ESearchType.FULL_TEXT,
-      scope: options.conversationId
-        ? ESearchScope.CURRENT_CONVERSATION
-        : ESearchScope.ALL_CONVERSATIONS,
-      conversationId: options.conversationId,
-      userFilter: options.userFilter,
-      userId: options.userId,
-      senderName: options.senderName,
-      limit: options.limit,
-      excludeCurrentUserName: options.currentUserName,
-    });
+//     const searchQuery = createSearchQuery(baseQuery, {
+//       type: options.exactPhrase
+//         ? ESearchType.EXACT_PHRASE
+//         : ESearchType.FULL_TEXT,
+//       scope: options.conversationId
+//         ? ESearchScope.CURRENT_CONVERSATION
+//         : ESearchScope.ALL_CONVERSATIONS,
+//       conversationId: options.conversationId,
+//       userFilter: options.userFilter,
+//       userId: options.userId,
+//       senderName: options.senderName,
+//       limit: options.limit,
+//       excludeCurrentUserName: options.currentUserName,
+//     });
 
-    return searchRepo.search(searchQuery);
-  },
-  "performAdvancedSearch"
-);
+//     return searchRepo.search(searchQuery);
+//   },
+//   "performAdvancedSearch"
+// );

@@ -72,7 +72,7 @@ const initWorker = async () => {
         sender_id UNINDEXED,
         conversation_id UNINDEXED,
         created_at UNINDEXED,
-        tokenize = 'unicode61 remove_diacritics 1',
+        tokenize = 'unicode61 remove_diacritics 2',
         prefix = '1,2,3'
       );
     `);

@@ -53,6 +53,10 @@ export function useSearchMessagesQuery({
     enabled: isEnabled,
     staleTime,
     queryFn: async (): Promise<SearchResult[]> => {
+      if (!currentUser?.id) {
+        throw new Error("User must be authenticated to search messages");
+      }
+
       const searchQuery = {
         query,
         type: ESearchType.FULL_TEXT,
@@ -68,12 +72,12 @@ export function useSearchMessagesQuery({
         ? await service.search.searchInConversation(
             query,
             conversationId,
-            currentUser?.id,
+            currentUser.id,
             currentUser?.displayName
           )
         : await service.search.performSearch(
             searchQuery,
-            currentUser?.id,
+            currentUser.id,
             currentUser?.displayName
           );
 
@@ -113,10 +117,13 @@ export function useSearchExactPhraseQuery({
     enabled: isEnabled,
     staleTime,
     queryFn: async (): Promise<SearchResult[]> => {
+      if (!currentUser?.id) {
+        throw new Error("User must be authenticated to search messages");
+      }
       const result = await service.search.searchExactPhrase(
         query,
+        currentUser.id,
         conversationId,
-        currentUser?.id,
         currentUser?.displayName
       );
       const results = result.items.map((item) => ({

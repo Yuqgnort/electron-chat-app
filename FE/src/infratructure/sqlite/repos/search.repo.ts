@@ -66,13 +66,30 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     return clause;
   };
 
+  const normalizeForSearch = (s: string) =>
+    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  function buildPhraseSearch(query: string) {
+    const tokens = query.trim().split(/\s+/);
+    // Biến mỗi token thành prefix search
+    const phrase = tokens.map((t) => `${t}*`).join(" ");
+    return `"${phrase}"`; // exact phrase với prefix
+  }
+
   const performFullTextSearch = async (
     query: ISearchQuery
   ): Promise<ISearchResultItem[]> => {
+    console.log(
+      "Performing full-text search with query:",
+      sanitizeString(query.query)
+    );
+
     let sql = `
       SELECT id, content, sender_name, sender_id, conversation_id, created_at, rank
       FROM messages_fts 
-      WHERE messages_fts MATCH '${sanitizeString(query.query)}*'
+      WHERE messages_fts MATCH '${sanitizeString(
+        normalizeForSearch(buildPhraseSearch(query.query))
+      )}*'
     `;
 
     if (
@@ -86,6 +103,8 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     sql += ` ORDER BY created_at DESC LIMIT ${query.limit || 50}`;
 
     const rawResults = await db.select(sql);
+    console.log("Raw search results:", rawResults);
+
     return mapSQLiteRows(rawResults as any[], mapToSearchResultItem);
   };
 

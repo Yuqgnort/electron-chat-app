@@ -3,6 +3,7 @@ import {
   TTransactionTable,
 } from "@/core/application/services-facade";
 import { SQLiteWorkerDB } from "./init";
+import { createNormalizeSearchString } from "@/core/domain/search/entity";
 
 type WithId<T> = T & { id: string };
 type WithoutId<T> = T extends { id: any } ? never : T;
@@ -19,7 +20,7 @@ export function genUUID<T extends object>(
 }
 
 export function sanitizeString(str: string): string {
-  return str.replace(/'/g, "''");
+  return createNormalizeSearchString(str);
 }
 
 export function formatTimestamp(timestamp: number): string {

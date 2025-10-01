@@ -73,8 +73,11 @@ const initWorker = async () => {
         conversation_id UNINDEXED,
         created_at UNINDEXED,
         tokenize = 'unicode61 remove_diacritics 2',
-        prefix = '1,2,3'
+        prefix = 1,
+        prefix = 2,
+        prefix = 3
       );
+      CREATE VIRTUAL TABLE vocab USING fts5vocab(messages_fts, 'row');
     `);
 
     // Restore existing data with empty sender_id (will be migrated later)

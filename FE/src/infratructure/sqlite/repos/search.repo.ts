@@ -33,8 +33,6 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
   const buildUserFilterClause = (query: ISearchQuery): string => {
     let clause = "";
-
-    // Luôn loại bỏ tin nhắn của current user - ưu tiên dùng excludeCurrentUserId nếu có
     if (query.excludeCurrentUserId) {
       clause += ` AND sender_id != '${sanitizeString(query.excludeCurrentUserId)}'`;
     } else if (query.excludeCurrentUserName) {
@@ -46,7 +44,6 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
 
     if (query.userFilter === EUserFilter.SPECIFIC_USER) {
-      // Ưu tiên dùng userId cho exact matching
       if (query.userId) {
         clause += ` AND sender_id = '${sanitizeString(query.userId)}'`;
       } else if (query.senderName) {
@@ -55,7 +52,6 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
 
     if (query.userFilter === EUserFilter.EXCLUDE_USER) {
-      // Ưu tiên dùng userId cho exact matching
       if (query.userId) {
         clause += ` AND sender_id != '${sanitizeString(query.userId)}'`;
       } else if (query.senderName) {
@@ -66,14 +62,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     return clause;
   };
 
-  const normalizeForSearch = (s: string) =>
-    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
   function buildPhraseSearch(query: string) {
     const tokens = query.trim().split(/\s+/);
-    // Biến mỗi token thành prefix search
-    const phrase = tokens.map((t) => `${t}*`).join(" ");
-    return `"${phrase}"`; // exact phrase với prefix
+    if (tokens.length === 1) {
+      return `${tokens[0]}*`;
+    } else {
+      return `"${query}"*`;
+    }
   }
 
   const performFullTextSearch = async (
@@ -81,15 +76,14 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
   ): Promise<ISearchResultItem[]> => {
     console.log(
       "Performing full-text search with query:",
-      sanitizeString(query.query)
+      buildPhraseSearch(sanitizeString(query.query))
     );
-
     let sql = `
       SELECT id, content, sender_name, sender_id, conversation_id, created_at, rank
       FROM messages_fts 
-      WHERE messages_fts MATCH '${sanitizeString(
-        normalizeForSearch(buildPhraseSearch(query.query))
-      )}*'
+      WHERE messages_fts MATCH '${buildPhraseSearch(
+        sanitizeString(query.query)
+      )}'
     `;
 
     if (
@@ -102,8 +96,9 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     sql += buildUserFilterClause(query);
     sql += ` ORDER BY created_at DESC LIMIT ${query.limit || 50}`;
 
+    console.log("Final SQL for full-text search:", sql);
+
     const rawResults = await db.select(sql);
-    console.log("Raw search results:", rawResults);
 
     return mapSQLiteRows(rawResults as any[], mapToSearchResultItem);
   };

@@ -4,17 +4,16 @@ import { IConvRepo } from "../domain/conv/repo";
 import { createInitMsg, IMsgEntity } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
-import { ISearchRepository } from "../domain/search/repo";
 import {
+  createSearchRawItem,
+  createSearchRawResult,
+  ISearchIndexItem,
+  ISearchIndexResult,
   ISearchQuery,
-  ISearchResult,
-  ISearchResultItem,
-  ESearchType,
-  ESearchScope,
-  EUserFilter,
-  createSearchResult,
+  ISearchRawResultItem,
+  TRankingColection,
 } from "../domain/search/entity";
-import { TID } from "../domain/type";
+import { ISearchRepository } from "../domain/search/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
 import { IEventBus } from "./eventbus";
@@ -27,6 +26,7 @@ import {
 import { createConv, getConvById } from "./usecase/conv.uc";
 import { createMsg, getMsgById } from "./usecase/msg.uc";
 import { addPendingMsg } from "./usecase/pending-msg.uc";
+import { prefixSearch, searchExactPhrase } from "./usecase/search.uc";
 import { getUserById } from "./usecase/user.uc";
 
 export const createConvWithParticipants = async (
@@ -237,83 +237,32 @@ export const sendHeartbeat = async (
   await communicationManager.sendHeartbeat({ userId, timestamp });
 };
 
-const checkUserAccessToConversation = async (
-  convPartRepo: IConvPartRepo,
-  userId: TID,
-  conversationId: TID
-): Promise<boolean> => {
-  try {
-    const convParts = await getConvPartsByConvId(convPartRepo, conversationId);
-    return convParts?.some((part) => part.userId === userId) || false;
-  } catch (error) {
-    console.error("Error checking conversation access:", error);
-    return false;
-  }
-};
-
-const filterMessagesUserHasAccessTo = async (
-  convPartRepo: IConvPartRepo,
-  userId: TID,
-  messages: ISearchResultItem[]
-): Promise<ISearchResultItem[]> => {
-  const accessChecks = await Promise.all(
-    messages.map(async (message) => {
-      const hasAccess = await checkUserAccessToConversation(
-        convPartRepo,
-        userId,
-        message.conversationId
-      );
-      return { message, hasAccess };
-    })
-  );
-
-  return accessChecks
-    .filter(({ hasAccess }) => hasAccess)
-    .map(({ message }) => message);
-};
-
-export const performEnhancedSearch = async (
+export const prefixSearchAndGetRawData = async (
   searchRepo: ISearchRepository,
   msgRepo: IMsgRepo,
   userRepo: IUserRepo,
-  convPartRepo: IConvPartRepo,
+  transactionManager: ITransactionManager,
   query: ISearchQuery,
-  currentUserId: TID
-): Promise<ISearchResult> => {
+  rank?: TRankingColection
+) => {
   const startTime = Date.now();
-
   try {
-    // Step 1: Get search results from FTS index (messageIds + basic info)
-    const indexResults = await searchRepo.search(query);
-
-    if (indexResults.items.length === 0) {
-      return indexResults;
-    }
-
-    // Step 2: Filter messages based on user access to conversations
-    const accessibleMessages = await filterMessagesUserHasAccessTo(
-      convPartRepo,
-      currentUserId,
-      indexResults.items
-    );
-
-    // Step 3: Fetch raw message data using the IDs from filtered results
+    const indexResults = await prefixSearch(searchRepo, query, rank);
     const enrichedItems = await enrichSearchResultsWithRawData(
-      msgRepo,
       userRepo,
-      accessibleMessages
+      msgRepo,
+      indexResults.items,
+      transactionManager
     );
-
-    const executionTime = Date.now() - startTime;
-    return createSearchResult(
+    return createSearchRawResult(
       enrichedItems,
       query.query,
       query.type,
-      executionTime
+      Date.now() - startTime
     );
   } catch (error) {
     console.error("Enhanced search error:", error);
-    return createSearchResult(
+    return createSearchRawResult(
       [],
       query.query,
       query.type,
@@ -322,248 +271,78 @@ export const performEnhancedSearch = async (
   }
 };
 
-export const searchInConversationEnhanced = async (
+export const exactPhraseSearchAndGetRawData = async (
   searchRepo: ISearchRepository,
   msgRepo: IMsgRepo,
   userRepo: IUserRepo,
-  convPartRepo: IConvPartRepo,
-  query: string,
-  conversationId: TID,
-  currentUserId: string,
-  currentUserName?: string
-): Promise<ISearchResult> => {
-  // Security check: Verify user has access to this conversation
-  const hasAccess = await checkUserAccessToConversation(
-    convPartRepo,
-    currentUserId,
-    conversationId
-  );
-
-  if (!hasAccess) {
-    console.warn(
-      `User ${currentUserId} attempted to search in conversation ${conversationId} without access`
+  transactionManager: ITransactionManager,
+  query: ISearchQuery,
+  rank?: TRankingColection
+) => {
+  const startTime = Date.now();
+  try {
+    const indexResults = await searchExactPhrase(searchRepo, query, rank);
+    const enrichedItems = await enrichSearchResultsWithRawData(
+      userRepo,
+      msgRepo,
+      indexResults.items,
+      transactionManager
     );
-    return createSearchResult([], query, ESearchType.FULL_TEXT, 0);
+    return createSearchRawResult(
+      enrichedItems,
+      query.query,
+      query.type,
+      Date.now() - startTime
+    );
+  } catch (error) {
+    console.error("Enhanced search error:", error);
+    return createSearchRawResult(
+      [],
+      query.query,
+      query.type,
+      Date.now() - startTime
+    );
   }
-
-  const searchQuery: ISearchQuery = {
-    query,
-    type: ESearchType.FULL_TEXT,
-    scope: ESearchScope.CURRENT_CONVERSATION,
-    conversationId,
-    excludeCurrentUserId: currentUserId,
-    excludeCurrentUserName: currentUserName,
-  };
-
-  return performEnhancedSearch(
-    searchRepo,
-    msgRepo,
-    userRepo,
-    convPartRepo,
-    searchQuery,
-    currentUserId
-  );
 };
 
-export const searchMessagesByUserEnhanced = async (
-  searchRepo: ISearchRepository,
-  msgRepo: IMsgRepo,
+export const getSearchRawResult = async (
   userRepo: IUserRepo,
-  convPartRepo: IConvPartRepo,
-  query: string,
-  userId: TID,
-  currentUserId: string,
-  conversationId?: TID
-): Promise<ISearchResult> => {
-  // Security check for conversation-specific search
-  if (conversationId) {
-    const hasAccess = await checkUserAccessToConversation(
-      convPartRepo,
-      currentUserId,
-      conversationId
-    );
-
-    if (!hasAccess) {
-      console.warn(
-        `User ${currentUserId} attempted to search messages by user ${userId} in conversation ${conversationId} without access`
+  msgRepo: IMsgRepo,
+  searchItem: ISearchIndexItem,
+  transactionManager: ITransactionManager
+): Promise<ISearchRawResultItem | null> => {
+  const rs = await transactionManager.executeInTransaction(
+    ["users", "messages"],
+    async () => {
+      const msg = await getMsgById(msgRepo, searchItem.id);
+      if (!msg) return null;
+      const sender = await getUserById(userRepo, msg.senderId);
+      const rs = createSearchRawItem(
+        msg,
+        sender?.name || "Unknown",
+        searchItem.rank,
+        searchItem.highlight
       );
-      return createSearchResult([], query, ESearchType.FULL_TEXT, 0);
+      return rs;
     }
-  }
-
-  const searchQuery: ISearchQuery = {
-    query,
-    type: ESearchType.FULL_TEXT,
-    scope: conversationId
-      ? ESearchScope.CURRENT_CONVERSATION
-      : ESearchScope.ALL_CONVERSATIONS,
-    conversationId,
-    userFilter: EUserFilter.SPECIFIC_USER,
-    userId,
-  };
-
-  return performEnhancedSearch(
-    searchRepo,
-    msgRepo,
-    userRepo,
-    convPartRepo,
-    searchQuery,
-    currentUserId
   );
+  return rs || null;
 };
 
-export const searchMessagesExcludingUserEnhanced = async (
-  searchRepo: ISearchRepository,
-  msgRepo: IMsgRepo,
+export const enrichSearchResultsWithRawData = async (
   userRepo: IUserRepo,
-  convPartRepo: IConvPartRepo,
-  query: string,
-  userId: TID,
-  currentUserId: string,
-  conversationId?: TID
-): Promise<ISearchResult> => {
-  // Security check for conversation-specific search
-  if (conversationId) {
-    const hasAccess = await checkUserAccessToConversation(
-      convPartRepo,
-      currentUserId,
-      conversationId
+  msgRepo: IMsgRepo,
+  searchItems: ISearchIndexItem[],
+  transactionManager: ITransactionManager
+): Promise<ISearchRawResultItem[]> => {
+  try {
+    const results = await Promise.all(
+      searchItems.map((item) =>
+        getSearchRawResult(userRepo, msgRepo, item, transactionManager)
+      )
     );
-
-    if (!hasAccess) {
-      console.warn(
-        `User ${currentUserId} attempted to search messages excluding user ${userId} in conversation ${conversationId} without access`
-      );
-      return createSearchResult([], query, ESearchType.FULL_TEXT, 0);
-    }
+    return results.filter((r) => r !== null);
+  } catch (error) {
+    return [];
   }
-
-  const searchQuery: ISearchQuery = {
-    query,
-    type: ESearchType.FULL_TEXT,
-    scope: conversationId
-      ? ESearchScope.CURRENT_CONVERSATION
-      : ESearchScope.ALL_CONVERSATIONS,
-    conversationId,
-    userFilter: EUserFilter.EXCLUDE_USER,
-    userId,
-  };
-
-  return performEnhancedSearch(
-    searchRepo,
-    msgRepo,
-    userRepo,
-    convPartRepo,
-    searchQuery,
-    currentUserId
-  );
-};
-
-export const searchExactPhraseEnhanced = async (
-  searchRepo: ISearchRepository,
-  msgRepo: IMsgRepo,
-  userRepo: IUserRepo,
-  convPartRepo: IConvPartRepo,
-  phrase: string,
-  currentUserId: string,
-  conversationId?: TID,
-  currentUserName?: string
-): Promise<ISearchResult> => {
-  // Security check for conversation-specific search
-  if (conversationId) {
-    const hasAccess = await checkUserAccessToConversation(
-      convPartRepo,
-      currentUserId,
-      conversationId
-    );
-
-    if (!hasAccess) {
-      console.warn(
-        `User ${currentUserId} attempted to search exact phrase in conversation ${conversationId} without access`
-      );
-      return createSearchResult([], phrase, ESearchType.EXACT_PHRASE, 0);
-    }
-  }
-
-  const searchQuery: ISearchQuery = {
-    query: phrase,
-    type: ESearchType.EXACT_PHRASE,
-    scope: conversationId
-      ? ESearchScope.CURRENT_CONVERSATION
-      : ESearchScope.ALL_CONVERSATIONS,
-    conversationId,
-    excludeCurrentUserId: currentUserId,
-    excludeCurrentUserName: currentUserName,
-  };
-
-  return performEnhancedSearch(
-    searchRepo,
-    msgRepo,
-    userRepo,
-    convPartRepo,
-    searchQuery,
-    currentUserId
-  );
-};
-
-const enrichSearchResultsWithRawData = async (
-  msgRepo: IMsgRepo,
-  userRepo: IUserRepo,
-  searchItems: ISearchResultItem[]
-): Promise<ISearchResultItem[]> => {
-  const enrichedItems: ISearchResultItem[] = [];
-
-  for (const item of searchItems) {
-    try {
-      // Fetch raw message data from message repository
-      const rawMessage = await msgRepo.getById(item.id);
-
-      if (rawMessage) {
-        // Use raw data as source of truth, keep search ranking
-        const enrichedItem: ISearchResultItem = {
-          id: rawMessage.id,
-          content: rawMessage.content, // Raw content from DB
-          senderName: item.senderName, // Keep from search for performance
-          senderId: rawMessage.senderId, // Raw senderId from DB
-          conversationId: rawMessage.conversationId, // Raw conversationId from DB
-          createdAt: rawMessage.createdAt, // Raw timestamp from DB
-          rank: item.rank, // Keep search ranking
-          highlight: item.highlight, // Keep search highlighting if any
-        };
-
-        // Optionally enrich with fresh user data if senderId changed
-        if (rawMessage.senderId && rawMessage.senderId !== item.senderId) {
-          try {
-            const user = await userRepo.getById(rawMessage.senderId);
-            if (user) {
-              enrichedItem.senderName = user.displayName || user.userName;
-            }
-          } catch (userError) {
-            console.warn(
-              `Failed to fetch user data for ${rawMessage.senderId}:`,
-              userError
-            );
-            // Keep existing senderName from search index
-          }
-        }
-
-        enrichedItems.push(enrichedItem);
-      } else {
-        // Message not found in main DB, keep search result as fallback
-        console.warn(
-          `Message ${item.id} found in search index but not in main DB`
-        );
-        enrichedItems.push(item);
-      }
-    } catch (error) {
-      console.warn(
-        `Failed to enrich search result for message ${item.id}:`,
-        error
-      );
-      // Fallback to search index data
-      enrichedItems.push(item);
-    }
-  }
-
-  return enrichedItems;
 };

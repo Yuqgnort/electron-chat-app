@@ -38,7 +38,6 @@ export class SQLiteWorkerDB {
 
   async init() {
     await this.sendPostMessage("init");
-    console.log("SQLite Worker with OpfsDb initialized");
   }
 
   async exec(sql: string) {

@@ -1,80 +1,71 @@
+import { IMsgEntity } from "../msg/entity";
 import { TID, TTimeStamp } from "../type";
 
-// Enums cho search
 export enum ESearchType {
   FULL_TEXT = "full_text",
   EXACT_PHRASE = "exact_phrase",
-  AUTOCOMPLETE = "autocomplete",
 }
 
-export enum ESearchScope {
-  ALL_CONVERSATIONS = "all_conversations",
-  CURRENT_CONVERSATION = "current_conversation",
-}
+export type TRankingColection = {
+  recencyBoost: {
+    weight?: number;
+    calFunction?: (createdAt: TTimeStamp) => number;
+  };
+  conversationActivityBoost: {
+    weight?: number;
+    calFunction?: (lastMessagesUpdateAt: TTimeStamp) => number;
+  };
+};
 
-export enum EUserFilter {
-  ALL_USERS = "all_users",
-  SPECIFIC_USER = "specific_user",
-  EXCLUDE_USER = "exclude_user",
-}
-
-// Interfaces chính
 export interface ISearchQuery {
   query: string;
-  type: ESearchType;
-  scope: ESearchScope;
+  currentUserId: TID;
+  userId?: TID;
   conversationId?: TID;
-  limit?: number;
-  // User filtering options
-  userFilter?: EUserFilter;
-  userId?: TID; // For SPECIFIC_USER or EXCLUDE_USER
-  senderName?: string; // Alternative to userId, search by name
-  excludeCurrentUserName?: string; // Exclude messages from current user (fallback)
-  excludeCurrentUserId?: TID; // Exclude messages from current user (preferred)
+  limit: number;
+  createdAt?: TTimeStamp;
+  type: ESearchType;
 }
 
-export interface ISearchResultItem {
+export interface ISearchRawResultItem extends IMsgEntity {
+  senderName: string;
+  rank?: number;
+  highlight?: string;
+}
+
+export type ISearchRawResult = {
+  items: ISearchRawResultItem[];
+  totalFound: number;
+  executionTime?: number;
+  query: string;
+  searchType: ESearchType;
+};
+
+export interface ISearchIndexItem {
   id: TID;
   content: string;
-  senderName: string;
-  senderId?: TID; // ID của người gửi
+  senderId: TID;
   conversationId: TID;
   createdAt: TTimeStamp;
   rank?: number;
-  highlight?: string; // Content với highlighted query
+  highlight?: string;
 }
 
-export interface ISearchResult {
-  items: ISearchResultItem[];
+export interface ISearchIndexResult {
+  items: ISearchIndexItem[];
   query: string;
   totalFound: number;
   searchType: ESearchType;
-  executionTime?: number; // ms
-}
-
-export interface IAutocompleteSuggestion {
-  suggestion: string;
-  frequency: number;
-}
-
-export interface IIndexStats {
-  totalMessages: number;
-  totalConversations: number;
-  totalSenders: number;
-  lastIndexedAt?: TTimeStamp;
-  indexSize?: number; // bytes
+  executionTime?: number;
 }
 
 export interface IMessageIndexData {
   messageId: TID;
   content: string;
-  senderName: string;
-  senderId: TID; // ID của người gửi để filter
+  senderId: TID;
   conversationId: TID;
   createdAt: TTimeStamp;
 }
-
-// Factory functions
 
 export const createNormalizeSearchString = (str: string): string => {
   return str
@@ -86,37 +77,48 @@ export const createNormalizeSearchString = (str: string): string => {
     .toLowerCase();
 };
 
-export const createSearchQuery = (
-  query: string,
-  options: Partial<Omit<ISearchQuery, "query">> = {}
-): ISearchQuery => {
+export const createSearchQuery = (options: ISearchQuery): ISearchQuery => {
   return {
-    query: createNormalizeSearchString(query),
-    type: options.type || ESearchType.FULL_TEXT,
-    scope: options.scope || ESearchScope.ALL_CONVERSATIONS,
-    conversationId: options.conversationId,
-    limit: options.limit || 50,
-    userFilter: options.userFilter || EUserFilter.ALL_USERS,
-    userId: options.userId,
-    senderName: options.senderName,
-    excludeCurrentUserName: options.excludeCurrentUserName,
-    excludeCurrentUserId: options.excludeCurrentUserId,
+    ...options,
+    query: createNormalizeSearchString(options.query),
   };
 };
 
-export const normalizeSearchQuery = (query: ISearchQuery): ISearchQuery => {
+export const createSearchRawItem = (
+  msg: IMsgEntity,
+  senderName: string,
+  rank?: number,
+  highlight?: string
+): ISearchRawResultItem => {
   return {
-    ...query,
-    query: createNormalizeSearchString(query.query),
+    ...msg,
+    senderName,
+    rank,
+    highlight,
   };
 };
 
-export const createSearchResult = (
-  items: ISearchResultItem[],
+export const createSearchRawResult = (
+  items: ISearchRawResultItem[],
   query: string,
   searchType: ESearchType,
   executionTime?: number
-): ISearchResult => {
+): ISearchRawResult => {
+  return {
+    items,
+    query,
+    totalFound: items.length,
+    searchType,
+    executionTime,
+  };
+};
+
+export const createSearchIndexResult = (
+  items: ISearchIndexItem[],
+  query: string,
+  searchType: ESearchType,
+  executionTime?: number
+): ISearchIndexResult => {
   return {
     items,
     query,
@@ -129,56 +131,27 @@ export const createSearchResult = (
 export const createMessageIndexData = (
   messageId: TID,
   content: string,
-  senderName: string,
   senderId: TID,
   conversationId: TID,
   createdAt: TTimeStamp
 ): IMessageIndexData => {
   return {
     messageId,
-    content: content.trim(),
-    senderName: senderName.trim(),
+    content: createNormalizeSearchString(content),
     senderId,
     conversationId,
     createdAt,
   };
 };
 
-// Utility functions
 export const isValidSearchQuery = (query: ISearchQuery): boolean => {
   const hasValidQuery = query.query.length > 0;
   const hasValidType = Object.values(ESearchType).includes(query.type);
-  const hasValidScope = Object.values(ESearchScope).includes(query.scope);
-  const hasValidLimit = query.limit === undefined || query.limit > 0;
-  const hasValidUserFilter =
-    query.userFilter === undefined ||
-    Object.values(EUserFilter).includes(query.userFilter);
+  const hasValidLimit =
+    query.limit === undefined ||
+    (Number.isInteger(query.limit) && query.limit > 0);
 
-  // Nếu userFilter là SPECIFIC_USER hoặc EXCLUDE_USER thì phải có userId hoặc senderName
-  const hasValidUserParams =
-    !query.userFilter ||
-    query.userFilter === EUserFilter.ALL_USERS ||
-    (query.userFilter === EUserFilter.SPECIFIC_USER &&
-      !!(query.userId || query.senderName)) ||
-    (query.userFilter === EUserFilter.EXCLUDE_USER &&
-      !!(query.userId || query.senderName));
-
-  return (
-    hasValidQuery &&
-    hasValidType &&
-    hasValidScope &&
-    hasValidLimit &&
-    hasValidUserFilter &&
-    hasValidUserParams
-  );
-};
-
-export const shouldIncludeConversationFilter = (
-  query: ISearchQuery
-): boolean => {
-  return (
-    query.scope === ESearchScope.CURRENT_CONVERSATION && !!query.conversationId
-  );
+  return hasValidQuery && hasValidType && hasValidLimit;
 };
 
 export const highlightSearchResult = (
@@ -202,49 +175,32 @@ export const highlightSearchResult = (
   );
 };
 
-// Helper functions cho user filtering
-export const shouldFilterByUser = (query: ISearchQuery): boolean => {
-  return !!(
-    query.userFilter &&
-    query.userFilter !== EUserFilter.ALL_USERS &&
-    (query.userId || query.senderName)
-  );
-};
+export const createRankingColection = (
+  params?: TRankingColection
+): TRankingColection => {
+  const defaultRecencyCalFunction = (createdAt: TTimeStamp) => {
+    const ageInHours = (Date.now() - createdAt) / (1000 * 60 * 60);
+    return Math.max(0, 1 - ageInHours / 168);
+  };
 
-export const shouldIncludeUser = (query: ISearchQuery): boolean => {
-  return query.userFilter === EUserFilter.SPECIFIC_USER;
-};
+  const defaultConversationActivityCalFunction = (
+    lastMessagesUpdateAt: TTimeStamp
+  ) => {
+    const ageInHours = (Date.now() - lastMessagesUpdateAt) / (1000 * 60 * 60);
+    return Math.max(0, 1 - ageInHours / 168);
+  };
 
-export const shouldExcludeUser = (query: ISearchQuery): boolean => {
-  return query.userFilter === EUserFilter.EXCLUDE_USER;
-};
-
-export const createUserFilterQuery = (
-  baseQuery: string,
-  userId?: TID,
-  senderName?: string,
-  include: boolean = true
-): ISearchQuery => {
-  return createSearchQuery(baseQuery, {
-    userFilter: include ? EUserFilter.SPECIFIC_USER : EUserFilter.EXCLUDE_USER,
-    userId,
-    senderName,
-  });
-};
-
-// Factory function để tạo search query với user filter
-export const createSearchQueryWithUserFilter = (
-  query: string,
-  userFilter: EUserFilter,
-  userIdentifier?: { userId?: TID; senderName?: string },
-  otherOptions?: Partial<
-    Omit<ISearchQuery, "query" | "userFilter" | "userId" | "senderName">
-  >
-): ISearchQuery => {
-  return createSearchQuery(query, {
-    ...otherOptions,
-    userFilter,
-    userId: userIdentifier?.userId,
-    senderName: userIdentifier?.senderName,
-  });
+  return {
+    recencyBoost: {
+      weight: params?.recencyBoost.weight || 0.7,
+      calFunction:
+        params?.recencyBoost.calFunction || defaultRecencyCalFunction,
+    },
+    conversationActivityBoost: {
+      weight: params?.conversationActivityBoost.weight || 0.3,
+      calFunction:
+        params?.conversationActivityBoost.calFunction ||
+        defaultConversationActivityCalFunction,
+    },
+  };
 };

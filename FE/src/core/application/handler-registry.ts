@@ -1,4 +1,3 @@
-// Global handler registry to prevent duplicate handlers during HMR
 class HandlerRegistry {
   private registeredHandlers = new Set<string>();
   private unsubscribers = new Map<string, () => void>();
@@ -71,10 +70,8 @@ class HandlerRegistry {
   }
 }
 
-// Global instance
 const globalHandlerRegistry = new HandlerRegistry();
 
-// Hot module replacement cleanup for development
 if (typeof window !== "undefined" && (window as any).module?.hot) {
   (window as any).module.hot.dispose(() => {
     console.log("[HandlerRegistry] HMR dispose triggered");
@@ -82,7 +79,6 @@ if (typeof window !== "undefined" && (window as any).module?.hot) {
   });
 }
 
-// Clean up on process exit for Electron
 if (typeof process !== "undefined") {
   process.on("beforeExit", () => {
     console.log("[HandlerRegistry] Process beforeExit triggered");

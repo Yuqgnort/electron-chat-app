@@ -3,6 +3,7 @@ import { IConvRepo } from "../domain/conv/repo";
 import { IMsgEntity, TMsgDirection } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
+import { TRankingColection } from "../domain/search/entity";
 import { ISearchRepository } from "../domain/search/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
@@ -11,14 +12,11 @@ import { TIntegrationSentEvent } from "./event";
 import { IEventBus } from "./eventbus";
 import {
   createConvWithParticipants,
+  exactPhraseSearchAndGetRawData,
   getConvsWithParticipantsByUserId,
-  performEnhancedSearch,
+  prefixSearchAndGetRawData,
   requestAllOnlineUsers,
   requestUsersStatus,
-  searchExactPhraseEnhanced,
-  searchInConversationEnhanced,
-  searchMessagesByUserEnhanced,
-  searchMessagesExcludingUserEnhanced,
   sendHeartbeat,
   sendMsg,
   startTyping,
@@ -27,14 +25,6 @@ import {
 import { getConvByUserIds } from "./usecase/conv.uc";
 import { getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
 import { getAllPendingMsgs } from "./usecase/pending-msg.uc";
-import {
-  bulkIndexMessages,
-  getUserMessageCount,
-  indexMessage,
-  isMessageIndexed,
-  removeMessageFromIndex,
-  updateMessageInIndex,
-} from "./usecase/search.uc";
 import { getAllUsers, getUserById } from "./usecase/user.uc";
 
 type ExtractPayload<
@@ -196,184 +186,37 @@ export function createAppService(
       ),
     },
     search: {
-      performSearch: withErrorHandling(
+      prefixSearch: withErrorHandling(
         async (
-          query: Parameters<typeof performEnhancedSearch>[4],
-          currentUserId: string,
-          currentUserName?: string
+          query: Parameters<typeof prefixSearchAndGetRawData>[4],
+          rank?: TRankingColection
         ) => {
-          // Add excludeCurrentUserId/excludeCurrentUserName to query if provided
-          if (currentUserId) {
-            query.excludeCurrentUserId = currentUserId;
-          } else if (currentUserName) {
-            query.excludeCurrentUserName = currentUserName;
-          }
-
-          return await performEnhancedSearch(
+          return await prefixSearchAndGetRawData(
             repos.searchRepo,
             repos.msgRepo,
             repos.userRepo,
-            repos.convPartRepo,
+            transactionManager,
             query,
-            currentUserId
+            rank
           );
         },
-        "performSearch"
-      ),
-      searchInConversation: withErrorHandling(
-        async (
-          query: string,
-          conversationId: string,
-          currentUserId: string,
-          currentUserName?: string
-        ) =>
-          await searchInConversationEnhanced(
-            repos.searchRepo,
-            repos.msgRepo,
-            repos.userRepo,
-            repos.convPartRepo,
-            query,
-            conversationId,
-            currentUserId,
-            currentUserName
-          ),
-        "searchInConversation"
-      ),
-      searchMessagesByUser: withErrorHandling(
-        async (
-          query: string,
-          userId: string,
-          currentUserId: string,
-          conversationId?: string
-        ) =>
-          await searchMessagesByUserEnhanced(
-            repos.searchRepo,
-            repos.msgRepo,
-            repos.userRepo,
-            repos.convPartRepo,
-            query,
-            userId,
-            currentUserId,
-            conversationId
-          ),
-        "searchMessagesByUser"
-      ),
-      searchMessagesExcludingUser: withErrorHandling(
-        async (
-          query: string,
-          userId: string,
-          currentUserId: string,
-          conversationId?: string
-        ) =>
-          await searchMessagesExcludingUserEnhanced(
-            repos.searchRepo,
-            repos.msgRepo,
-            repos.userRepo,
-            repos.convPartRepo,
-            query,
-            userId,
-            currentUserId,
-            conversationId
-          ),
-        "searchMessagesExcludingUser"
+        "prefixSearch"
       ),
       searchExactPhrase: withErrorHandling(
         async (
-          phrase: string,
-          currentUserId: string,
-          conversationId?: string,
-          currentUserName?: string
+          query: Parameters<typeof prefixSearchAndGetRawData>[4],
+          rank?: TRankingColection
         ) =>
-          await searchExactPhraseEnhanced(
+          await exactPhraseSearchAndGetRawData(
             repos.searchRepo,
             repos.msgRepo,
             repos.userRepo,
-            repos.convPartRepo,
-            phrase,
-            currentUserId,
-            conversationId,
-            currentUserName
+            transactionManager,
+            query,
+            rank
           ),
         "searchExactPhrase"
       ),
-      // getSearchSuggestions: withErrorHandling(
-      //   async (
-      //     query: Parameters<typeof getSearchSuggestions>[1],
-      //     limit?: Parameters<typeof getSearchSuggestions>[2]
-      //   ) => await getSearchSuggestions(repos.searchRepo, query, limit),
-      //   "getSearchSuggestions"
-      // ),
-      // getUserMessages: withErrorHandling(
-      //   async (
-      //     userId: Parameters<typeof getUserMessages>[1],
-      //     conversationId?: Parameters<typeof getUserMessages>[2],
-      //     limit?: Parameters<typeof getUserMessages>[3]
-      //   ) =>
-      //     await getUserMessages(
-      //       repos.searchRepo,
-      //       userId,
-      //       conversationId,
-      //       limit
-      //     ),
-      //   "getUserMessages"
-      // ),
-      // getActiveUsers: withErrorHandling(
-      //   async (conversationId?: Parameters<typeof getActiveUsers>[1]) =>
-      //     await getActiveUsers(repos.searchRepo, conversationId),
-      //   "getActiveUsers"
-      // ),
-      indexMessage: withErrorHandling(
-        async (messageData: Parameters<typeof indexMessage>[1]) =>
-          await indexMessage(repos.searchRepo, messageData),
-        "indexMessage"
-      ),
-      updateMessageInIndex: withErrorHandling(
-        async (
-          messageId: Parameters<typeof updateMessageInIndex>[1],
-          content: Parameters<typeof updateMessageInIndex>[2],
-          senderName: Parameters<typeof updateMessageInIndex>[3],
-          senderId?: Parameters<typeof updateMessageInIndex>[4]
-        ) =>
-          await updateMessageInIndex(
-            repos.searchRepo,
-            messageId,
-            content,
-            senderName,
-            senderId
-          ),
-        "updateMessageInIndex"
-      ),
-      removeMessageFromIndex: withErrorHandling(
-        async (messageId: Parameters<typeof removeMessageFromIndex>[1]) =>
-          await removeMessageFromIndex(repos.searchRepo, messageId),
-        "removeMessageFromIndex"
-      ),
-      bulkIndexMessages: withErrorHandling(
-        async (messages: Parameters<typeof bulkIndexMessages>[1]) =>
-          await bulkIndexMessages(repos.searchRepo, messages),
-        "bulkIndexMessages"
-      ),
-      // getSearchStats: withErrorHandling(
-      //   async () => await getSearchStats(repos.searchRepo),
-      //   "getSearchStats"
-      // ),
-      isMessageIndexed: withErrorHandling(
-        async (messageId: Parameters<typeof isMessageIndexed>[1]) =>
-          await isMessageIndexed(repos.searchRepo, messageId),
-        "isMessageIndexed"
-      ),
-      getUserMessageCount: withErrorHandling(
-        async (userId: Parameters<typeof getUserMessageCount>[1]) =>
-          await getUserMessageCount(repos.searchRepo, userId),
-        "getUserMessageCount"
-      ),
-      // performAdvancedSearch: withErrorHandling(
-      //   async (
-      //     baseQuery: Parameters<typeof performAdvancedSearch>[1],
-      //     options: Parameters<typeof performAdvancedSearch>[2]
-      //   ) => await performAdvancedSearch(repos.searchRepo, baseQuery, options),
-      //   "performAdvancedSearch"
-      // ),
     },
   };
 }

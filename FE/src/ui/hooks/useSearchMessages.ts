@@ -1,6 +1,6 @@
+import { ESearchType, ISearchQuery } from "@/core/domain/search/entity";
 import { useAppContext } from "@/ui/context";
 import { useQuery } from "@tanstack/react-query";
-import { ESearchType, ESearchScope } from "@/core/domain/search/entity";
 import { useCurrentUserStore } from "./store/useCurrentUser";
 
 export interface SearchResult {
@@ -52,44 +52,21 @@ export function useSearchMessagesQuery({
     ],
     enabled: isEnabled,
     staleTime,
-    queryFn: async (): Promise<SearchResult[]> => {
+    queryFn: async () => {
       if (!currentUser?.id) {
         throw new Error("User must be authenticated to search messages");
       }
 
-      const searchQuery = {
+      const searchQuery: ISearchQuery = {
         query,
         type: ESearchType.FULL_TEXT,
-        scope: conversationId
-          ? ESearchScope.CURRENT_CONVERSATION
-          : ESearchScope.ALL_CONVERSATIONS,
         conversationId,
         limit,
-        excludeCurrentUserName: currentUser?.displayName,
+        currentUserId: currentUser.id,
       };
 
-      const result = conversationId
-        ? await service.search.searchInConversation(
-            query,
-            conversationId,
-            currentUser.id,
-            currentUser?.displayName
-          )
-        : await service.search.performSearch(
-            searchQuery,
-            currentUser.id,
-            currentUser?.displayName
-          );
-
-      return result.items.map((item) => ({
-        id: item.id,
-        content: item.content,
-        sender_name: item.senderName,
-        sender_id: item.senderId,
-        conversation_id: item.conversationId,
-        created_at: new Date(item.createdAt).toISOString(),
-        rank: item.rank || 0,
-      }));
+      const result = await service.search.prefixSearch(searchQuery);
+      return result;
     },
   });
 }
@@ -116,28 +93,19 @@ export function useSearchExactPhraseQuery({
     ],
     enabled: isEnabled,
     staleTime,
-    queryFn: async (): Promise<SearchResult[]> => {
+    queryFn: async () => {
       if (!currentUser?.id) {
         throw new Error("User must be authenticated to search messages");
       }
-      const result = await service.search.searchExactPhrase(
+      const searchQuery: ISearchQuery = {
         query,
-        currentUser.id,
+        type: ESearchType.EXACT_PHRASE,
         conversationId,
-        currentUser?.displayName
-      );
-      const results = result.items.map((item) => ({
-        id: item.id,
-        content: item.content,
-        sender_name: item.senderName,
-        sender_id: item.senderId,
-        conversation_id: item.conversationId,
-        created_at: new Date(item.createdAt).toISOString(),
-        rank: item.rank || 0,
-      }));
-      return limit && results.length > limit
-        ? results.slice(0, limit)
-        : results;
+        limit,
+        currentUserId: currentUser.id,
+      };
+      const result = await service.search.searchExactPhrase(searchQuery);
+      return result;
     },
   });
 }

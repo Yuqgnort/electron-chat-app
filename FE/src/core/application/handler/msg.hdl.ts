@@ -14,6 +14,7 @@ import { updateConvLastMessageId } from "../usecase/conv.uc";
 import { createMsg, setMsgDelivered, setMsgSent } from "../usecase/msg.uc";
 import { getAllPendingMsgs, removePendingMsg } from "../usecase/pending-msg.uc";
 import { globalHandlerRegistry } from "../handler-registry";
+import { createNormalizeSearchString } from "@/core/domain/search/entity";
 
 class MessageProcessingManager {
   private locks = new Map<string, Promise<void>>();
@@ -404,7 +405,6 @@ async function retrySinglePendingMsg(
           receiverId: pendingMsg.receiverId,
           conversationId: pendingMsg.conversationId,
         });
-
         await removePendingMsg(pendingMsgRepo, pendingMsg.localId);
         return true;
       } catch (err) {
@@ -419,89 +419,54 @@ async function retrySinglePendingMsg(
   );
 }
 
-const normalizeForSearch = (s: string) =>
-  s
-    .normalize("NFD") // tách dấu
-    .replace(/[\u0300-\u036f]/g, "") // xoá dấu
-    .replace(/đ/g, "d") // đ → d
-    .replace(/Đ/g, "D");
-
 export const autoIndexMessageHandler = (
   eventBus: IEventBus,
-  searchRepo: ISearchRepository,
-  userRepo: IUserRepo
+  searchRepo: ISearchRepository
 ) => {
   const handlerName = "autoIndexMessageHandler";
-
   if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(
-      `[${handlerName}] Already registered, skipping duplicate registration`
-    );
+    console.log(`[${handlerName}] Already registered`);
     return;
   }
-
   const unsubscriber = eventBus.subscribe(
     "MsgCreated",
     withErrorHandling(async ({ payload: msg }) => {
-      try {
-        // Check if message is already indexed to avoid duplicates
-        const isAlreadyIndexed = await searchRepo.isMessageIndexed(msg.id);
-
-        if (isAlreadyIndexed) {
-          console.log(`Message ${msg.id} already indexed, skipping`);
-          return;
-        }
-
-        const sender = await userRepo.getById(msg.senderId);
-        const senderName = sender?.userName || "Unknown";
-
-        await searchRepo.indexMessage({
-          messageId: msg.id,
-          content: normalizeForSearch(msg.content),
-          senderName,
-          senderId: msg.senderId,
-          conversationId: msg.conversationId,
-          createdAt: msg.createdAt,
-        });
-
-        console.log(`Message ${msg.id} indexed in FTS`);
-      } catch (error) {
-        console.error("Failed to index message in FTS:", error);
+      const isAlreadyIndexed = await searchRepo.isMessageIndexed(msg.id);
+      if (isAlreadyIndexed) {
+        throw new Error(`Message ${msg.id} is already indexed`);
       }
+      await searchRepo.indexMessage({
+        messageId: msg.id,
+        content: createNormalizeSearchString(msg.content),
+        conversationId: msg.conversationId,
+        createdAt: msg.createdAt,
+        senderId: msg.senderId,
+      });
     }, "autoIndexMessageHandler")
   );
-
   globalHandlerRegistry.register(handlerName, unsubscriber);
 };
 
 export const indexExistingMessages = async (
   msgRepo: IMsgRepo,
-  userRepo: IUserRepo,
   searchRepo: ISearchRepository
 ) => {
   try {
     console.log("Checking for unindexed messages...");
-
     const allMessages = await msgRepo.getAll();
     if (!allMessages) {
       console.log("No existing messages found");
       return;
     }
-
-    // Get already indexed message IDs
     const indexedIds = await searchRepo.getIndexedMessageIds();
     const indexedIdsSet = new Set(indexedIds);
-
-    // Filter out already indexed messages
     const unindexedMessages = allMessages.filter(
       (msg) => !indexedIdsSet.has(msg.id)
     );
-
     if (unindexedMessages.length === 0) {
       console.log(`All ${allMessages.length} messages are already indexed`);
       return;
     }
-
     console.log(
       `Found ${unindexedMessages.length} unindexed messages out of ${allMessages.length} total`
     );
@@ -509,16 +474,12 @@ export const indexExistingMessages = async (
     let indexed = 0;
     for (const msg of unindexedMessages) {
       try {
-        const sender = await userRepo.getById(msg.senderId);
-        const senderName = sender?.userName || "Unknown";
-
         await searchRepo.indexMessage({
           messageId: msg.id,
-          content: normalizeForSearch(msg.content),
-          senderName,
-          senderId: msg.senderId,
           conversationId: msg.conversationId,
           createdAt: msg.createdAt,
+          senderId: msg.senderId,
+          content: createNormalizeSearchString(msg.content),
         });
 
         indexed++;
@@ -532,7 +493,6 @@ export const indexExistingMessages = async (
         console.error(`Failed to index existing message ${msg.id}:`, error);
       }
     }
-
     console.log(
       `Successfully indexed ${indexed} new messages (${indexedIds.length + indexed} total indexed)`
     );

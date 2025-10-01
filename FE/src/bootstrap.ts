@@ -1,5 +1,6 @@
 import { withErrorHandling } from "./core/application/error";
 import { createInMemoryEventBus } from "./core/application/eventbus";
+import { debugHandlerRegistry } from "./core/application/handler-debug";
 import {
   autoIndexMessageHandler,
   indexExistingMessages,
@@ -9,9 +10,6 @@ import {
   updateMsgDeliveredHandler,
   updateMsgIncomingHandler,
 } from "./core/application/handler/msg.hdl";
-import { globalHandlerRegistry } from "./core/application/handler-registry";
-import { debugHandlerRegistry } from "./core/application/handler-debug";
-import { debugPendingMessages } from "./core/application/debug-pending";
 import { createAppService } from "./core/application/services-facade";
 import { ISearchRepository } from "./core/domain/search/repo";
 import { EUserGender, IUserEntity } from "./core/domain/user/entity";
@@ -95,8 +93,6 @@ export async function bootstrap() {
   const transactionManager = createIndexedDBTransactionManager(db);
   const socket = createSocketClient("ws://localhost:3000", eventBus);
 
-  console.log("[Bootstrap] Registering event handlers...");
-
   updateLastMsgHandler(eventBus, convRepo);
   updateMsgAckHandler(eventBus, msgRepo, pendingMsgRepo);
   updateMsgDeliveredHandler(eventBus, msgRepo);
@@ -109,21 +105,9 @@ export async function bootstrap() {
     socket
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
-  autoIndexMessageHandler(eventBus, searchRepo, userRepo);
-
-  console.log(
-    `[Bootstrap] Registered handlers:`,
-    globalHandlerRegistry.getRegisteredHandlers()
-  );
   debugHandlerRegistry();
-
-  // Add global debug function for pending messages
-  if (typeof window !== "undefined") {
-    (window as any).debugPendingMessages = () =>
-      debugPendingMessages(pendingMsgRepo);
-  }
-
-  indexExistingMessages(msgRepo, userRepo, searchRepo);
+  autoIndexMessageHandler(eventBus, searchRepo);
+  indexExistingMessages(msgRepo, searchRepo);
 
   const service = createAppService(
     {
@@ -179,7 +163,6 @@ export async function resetChatDataKeepUsers(
   onSuccess?: () => void
 ): Promise<ResetResult> {
   try {
-    const indexStats = await searchRepo.getIndexStats();
     await searchRepo.clearIndex();
     await sqliteDb.reset();
     await db.transaction(
@@ -195,7 +178,6 @@ export async function resetChatDataKeepUsers(
     if (onSuccess) onSuccess();
     return {
       success: true,
-      clearedStats: indexStats,
       message: "All chat data cleared, users preserved",
     };
   } catch (error) {

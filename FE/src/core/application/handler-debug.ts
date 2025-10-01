@@ -1,6 +1,5 @@
 import { globalHandlerRegistry } from "./handler-registry";
 
-// Debug utility to monitor handler registrations
 export const debugHandlerRegistry = () => {
   const info = globalHandlerRegistry.getRegistrationInfo();
   console.group("[HandlerRegistry Debug]");
@@ -17,8 +16,6 @@ export const debugHandlerRegistry = () => {
 
   console.groupEnd();
 };
-
-// Global debug function
 if (typeof window !== "undefined") {
   (window as any).debugHandlers = debugHandlerRegistry;
 }

@@ -1,3 +1,4 @@
+import { ISearchRawResultItem } from "@/core/domain/search/entity";
 import { useDebounce } from "@/ui/hooks/useDebounce";
 import {
   useSearchExactPhraseQuery,
@@ -38,7 +39,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const {
-    data: fuzzyResults = [],
+    data: fuzzyResults,
     isFetching: isFetchingFuzzy,
     error: fuzzyError,
   } = useSearchMessagesQuery({
@@ -50,7 +51,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   });
 
   const {
-    data: exactPhraseResults = [],
+    data: exactPhraseResults,
     isFetching: isFetchingExact,
     error: exactError,
   } = useSearchExactPhraseQuery({
@@ -62,20 +63,21 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   });
 
   const activeResults = debouncedSearchParams.isExactPhrase
-    ? exactPhraseResults
-    : fuzzyResults;
+    ? exactPhraseResults?.items
+    : fuzzyResults?.items;
+
   const fetchError = debouncedSearchParams.isExactPhrase
     ? exactError
     : fuzzyError;
   const isFetching = isFetchingFuzzy || isFetchingExact;
-  const hasResults = activeResults.length > 0;
+  const hasResults = activeResults && activeResults.length > 0;
   const isEmpty =
     !hasResults && !isFetching && !!debouncedSearchParams.query.trim();
 
   console.log(activeResults);
 
-  const handleClickMessage = (result: SearchResult, tempt: string) => {
-    onMessageClick?.(result, tempt);
+  const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
+    // onMessageClick?.(result, tempt);
     onClose();
   };
 
@@ -89,7 +91,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
       .trim();
   }
 
-  // tạo mapping từ normalize sang text gốc
   function buildMapping(original: string) {
     const mapping: number[] = [];
     const normalized = [];
@@ -125,15 +126,11 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     while (idx !== -1) {
       const startOrig = mapping[idx];
       const endOrig = mapping[idx + normKw.length - 1] + 1;
-
-      // phần trước match
       if (startOrig > lastOriginalIdx) {
         elements.push(
           <span key={key++}>{text.slice(lastOriginalIdx, startOrig)}</span>
         );
       }
-
-      // highlight
       elements.push(
         <mark key={key++} className="bg-yellow-200">
           {text.slice(startOrig, endOrig)}
@@ -143,8 +140,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
       lastOriginalIdx = endOrig;
       idx = normStr.indexOf(normKw, idx + normKw.length);
     }
-
-    // phần còn lại
     if (lastOriginalIdx < text.length) {
       elements.push(<span key={key++}>{text.slice(lastOriginalIdx)}</span>);
     }
@@ -152,7 +147,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     return <>{elements}</>;
   }
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | number) => {
     const timestamp = Number(date);
     const parsed = Number.isFinite(timestamp)
       ? new Date(timestamp)
@@ -277,23 +272,23 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
             <div className="divide-y">
               {activeResults.map((msg) => (
                 <div
-                  key={`${msg.id}-${msg.conversation_id}`}
+                  key={`${msg.id}-${msg.conversationId}`}
                   onClick={() => handleClickMessage(msg, searchParams.query)}
                   className="p-4 hover:bg-blue-100 cursor-pointer transition-colors"
                 >
                   <div className="flex items-start space-x-3">
                     <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-medium">
-                        {msg.sender_name.charAt(0).toUpperCase()}
+                        {msg.senderName.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-normal text-gray-500 text-sm">
-                          {msg.sender_name}
+                          {msg.senderName}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {formatDate(msg.created_at)}
+                          {formatDate(msg.createdAt)}
                         </span>
                       </div>
                       <p className="text-sm  line-clamp-2">

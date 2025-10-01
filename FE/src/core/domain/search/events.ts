@@ -1,5 +1,5 @@
 import { TID, TTimeStamp } from "../type";
-import { ISearchQuery, ISearchResult, IMessageIndexData } from "./entity";
+import { ISearchQuery, ISearchIndexResult, IMessageIndexData } from "./entity";
 
 // Base search event
 export interface ISearchEvent {
@@ -163,7 +163,6 @@ export interface IUserActivityAnalyzedEvent extends ISearchEvent {
   };
 }
 
-// Union type cho tất cả search events
 export type TSearchEvent =
   | ISearchPerformedEvent
   | ISearchFailedEvent

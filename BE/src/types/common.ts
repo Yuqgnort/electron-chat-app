@@ -21,7 +21,7 @@ export interface AckMessage {
 export interface ForwardMessage {
   server_id: string;
   conversation_id: number;
-  sender_id: number;
+  senderId: number;
   content: string;
 }
 
@@ -31,5 +31,5 @@ export interface Message {
   to: string;
   content: string;
   status: MessageStatus;
-  created_at: string;
+  createdAt: string;
 }

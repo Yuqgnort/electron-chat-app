@@ -2,7 +2,7 @@ import { IUserEntity } from "@/core/domain/user/entity";
 import { MessageCircleDashed } from "lucide-react";
 import { ChatHeader } from "./ChatHeader";
 import { MessageInput } from "./MessageInput";
-import { MessageList } from "./MessageList";
+import { MessageListWrapper } from "./MessageListWrapper";
 
 interface ChatWindowProps {
   receiverUser?: IUserEntity | null;
@@ -30,7 +30,7 @@ export function ChatWindow({ receiverUser, onSendMessage }: ChatWindowProps) {
     <div className="flex-1 flex flex-col h-full bg-white">
       <ChatHeader receiverUser={receiverUser} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <MessageList receiverUserId={receiverUser.id} />
+        <MessageListWrapper receiverUserId={receiverUser.id} />
       </div>
       <MessageInput
         onSendMessage={onSendMessage}

@@ -19,11 +19,12 @@ import {
 
 export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
   const mapToSearchIndexItem = (row: any): ISearchIndexItem => ({
-    id: row.id,
+    messageId: row.messageId,
     content: row.content,
-    senderId: row.sender_id,
-    conversationId: row.conversation_id,
-    createdAt: parseTimestamp(row.created_at),
+    senderId: row.senderId,
+    receiverId: row.receiverId,
+    conversationId: row.conversationId,
+    createdAt: parseTimestamp(row.createdAt),
     rank: row.rank,
     highlight: row.highlight,
   });
@@ -32,13 +33,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     let clause = "";
 
     // Filter by current user
-    if (query.currentUserId) {
-      clause += ` AND sender_id != '${sanitizeString(query.currentUserId)}'`;
-    }
+    // if (query.currentUserId) {
+    //   clause += ` AND senderId != '${sanitizeString(query.currentUserId)}'`;
+    // }
 
     // Filter by specific user
     if (query.userId) {
-      clause += ` AND sender_id = '${sanitizeString(query.userId)}'`;
+      clause += ` AND senderId = '${sanitizeString(query.userId)}'`;
     }
 
     return clause;
@@ -63,20 +64,20 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     );
 
     let sql = `
-      SELECT id, content, sender_id, conversation_id, created_at, 
+      SELECT messageId, content, senderId, conversationId, createdAt, 
              1.0 as rank, '' as highlight
-      FROM messages_fts 
-      WHERE messages_fts MATCH '${buildPhraseSearch(
+      FROM fts_index_global 
+      WHERE fts_index_global MATCH '${buildPhraseSearch(
         sanitizeString(query.query)
       )}'
     `;
 
     if (query.conversationId) {
-      sql += ` AND conversation_id = '${sanitizeString(query.conversationId)}'`;
+      sql += ` AND conversationId = '${sanitizeString(query.conversationId)}'`;
     }
 
     sql += buildUserFilterClause(query);
-    sql += ` ORDER BY created_at DESC LIMIT ${query.limit || 50}`;
+    sql += ` ORDER BY createdAt DESC LIMIT ${query.limit || 50}`;
 
     console.log("Final SQL for full-text search:", sql);
 
@@ -89,20 +90,22 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     ranking: TRankingColection
   ): Promise<ISearchIndexItem[]> => {
     let sql = `
-      SELECT id, content, sender_id, conversation_id, created_at,
+      SELECT messageId, content, senderId, conversationId, createdAt, receiverId,
              1.0 as rank, '' as highlight
-      FROM messages_fts 
-      WHERE messages_fts MATCH '"${sanitizeString(query.query)}"'
+      FROM fts_index_global 
+      WHERE fts_index_global MATCH '"${sanitizeString(query.query)}"'
     `;
 
     if (query.conversationId) {
-      sql += ` AND conversation_id = '${sanitizeString(query.conversationId)}'`;
+      sql += ` AND conversationId = '${sanitizeString(query.conversationId)}'`;
     }
 
     sql += buildUserFilterClause(query);
-    sql += ` ORDER BY created_at DESC LIMIT ${query.limit || 50}`;
+    sql += ` ORDER BY createdAt DESC LIMIT ${query.limit || 50}`;
 
+    console.log("Final SQL for exact phrase search:", sql);
     const rawResults = await db.select(sql);
+    console.log("Raw results:", rawResults);
     return mapSQLiteRows(rawResults as any[], mapToSearchIndexItem);
   };
 
@@ -187,52 +190,16 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         "senderId",
         "conversationId",
         "createdAt",
+        "receiverId",
       ]);
 
       const sql = `
-        INSERT INTO messages_fts(id, content, sender_id, conversation_id, created_at) 
-        VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}')
+        INSERT INTO fts_index_global(messageId, content, senderId, conversationId, createdAt, receiverId) 
+        VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}', '${messageData.receiverId}')
       `;
 
       console.log("Indexing message:", sql);
 
-      await db.exec(sql);
-    },
-
-    async updateMessageInIndex(
-      messageId: TID,
-      content: string,
-      senderName: string,
-      senderId?: TID
-    ): Promise<void> {
-      validateRequiredFields({ messageId, content, senderName }, [
-        "messageId",
-        "content",
-        "senderName",
-      ]);
-
-      const updateFields = [
-        `content = '${sanitizeString(content)}'`,
-        `sender_name = '${sanitizeString(senderName)}'`,
-      ];
-
-      if (senderId) {
-        updateFields.push(`sender_id = '${sanitizeString(senderId)}'`);
-      }
-
-      const sql = `
-        UPDATE messages_fts 
-        SET ${updateFields.join(", ")}
-        WHERE id = '${messageId}'
-      `;
-
-      await db.exec(sql);
-    },
-
-    async removeMessageFromIndex(messageId: TID): Promise<void> {
-      validateRequiredFields({ messageId }, ["messageId"]);
-
-      const sql = `DELETE FROM messages_fts WHERE id = '${messageId}'`;
       await db.exec(sql);
     },
 
@@ -243,33 +210,35 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     },
 
     async rebuildIndex(): Promise<void> {
-      await db.exec(`DELETE FROM messages_fts`);
+      await db.exec(`DELETE FROM fts_index_global`);
     },
 
     async clearIndex(): Promise<void> {
-      await db.exec(`DELETE FROM messages_fts`);
+      await db.exec(`DELETE FROM fts_index_global`);
     },
 
     async isMessageIndexed(messageId: TID): Promise<boolean> {
       const result = (await db.select(`
-        SELECT COUNT(*) as count FROM messages_fts WHERE id = '${messageId}'
+        SELECT COUNT(*) as count FROM fts_index_global WHERE messageId = '${messageId}'
       `)) as any[];
       return result && result.length > 0 && result[0].count > 0;
     },
 
     async getIndexedMessageIds(): Promise<TID[]> {
-      const result = (await db.select(`SELECT id FROM messages_fts`)) as any[];
+      const result = (await db.select(
+        `SELECT messageId FROM fts_index_global`
+      )) as any[];
       return result ? result.map((row: any) => row.id) : [];
     },
 
     async getIndexedUserIds(): Promise<TID[]> {
-      const sql = `SELECT DISTINCT sender_id FROM messages_fts WHERE sender_id IS NOT NULL AND sender_id != ''`;
+      const sql = `SELECT DISTINCT senderId FROM fts_index_global WHERE senderId IS NOT NULL AND senderId != ''`;
       const rawResults = await db.select(sql);
-      return mapSQLiteRows(rawResults as any[], (row: any) => row.sender_id);
+      return mapSQLiteRows(rawResults as any[], (row: any) => row.senderId);
     },
 
     async getUserMessageCount(userId: TID): Promise<number> {
-      const sql = `SELECT COUNT(*) as count FROM messages_fts WHERE sender_id = '${sanitizeString(userId)}'`;
+      const sql = `SELECT COUNT(*) as count FROM fts_index_global WHERE senderId = '${sanitizeString(userId)}'`;
       const result = await db.select(sql);
       if (Array.isArray(result) && result.length > 0) {
         return result[0].count || 0;
@@ -279,13 +248,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     async optimizeIndex(): Promise<void> {
       await db.exec(
-        `INSERT INTO messages_fts(messages_fts) VALUES('optimize')`
+        `INSERT INTO fts_index_global(fts_index_global) VALUES('optimize')`
       );
     },
 
     async validateIndex(): Promise<boolean> {
       try {
-        await db.select(`SELECT COUNT(*) FROM messages_fts LIMIT 1`);
+        await db.select(`SELECT COUNT(*) FROM fts_index_global LIMIT 1`);
         return true;
       } catch (error) {
         return false;

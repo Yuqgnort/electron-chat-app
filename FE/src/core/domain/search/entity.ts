@@ -28,6 +28,7 @@ export interface ISearchQuery {
 }
 
 export interface ISearchRawResultItem extends IMsgEntity {
+  receiverName: string;
   senderName: string;
   rank?: number;
   highlight?: string;
@@ -42,13 +43,14 @@ export type ISearchRawResult = {
 };
 
 export interface ISearchIndexItem {
-  id: TID;
+  messageId: TID;
   content: string;
   senderId: TID;
   conversationId: TID;
   createdAt: TTimeStamp;
   rank?: number;
   highlight?: string;
+  receiverId: TID;
 }
 
 export interface ISearchIndexResult {
@@ -65,6 +67,7 @@ export interface IMessageIndexData {
   senderId: TID;
   conversationId: TID;
   createdAt: TTimeStamp;
+  receiverId: TID;
 }
 
 export const createNormalizeSearchString = (str: string): string => {
@@ -84,17 +87,31 @@ export const createSearchQuery = (options: ISearchQuery): ISearchQuery => {
   };
 };
 
-export const createSearchRawItem = (
-  msg: IMsgEntity,
-  senderName: string,
-  rank?: number,
-  highlight?: string
-): ISearchRawResultItem => {
+export const createSearchRawItem = ({
+  msg,
+  receiverName,
+  senderId,
+  senderName,
+  receiverId,
+  rank,
+  highlight,
+}: {
+  msg: IMsgEntity;
+  receiverName: string;
+  senderId: TID;
+  senderName: string;
+  receiverId: TID;
+  rank?: number;
+  highlight?: string;
+}): ISearchRawResultItem => {
   return {
     ...msg,
-    senderName,
+    receiverName,
     rank,
     highlight,
+    senderId,
+    senderName,
+    receiverId,
   };
 };
 
@@ -133,7 +150,8 @@ export const createMessageIndexData = (
   content: string,
   senderId: TID,
   conversationId: TID,
-  createdAt: TTimeStamp
+  createdAt: TTimeStamp,
+  receiverId: TID
 ): IMessageIndexData => {
   return {
     messageId,
@@ -141,6 +159,7 @@ export const createMessageIndexData = (
     senderId,
     conversationId,
     createdAt,
+    receiverId,
   };
 };
 

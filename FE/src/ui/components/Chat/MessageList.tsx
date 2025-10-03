@@ -1,193 +1,178 @@
-import { IMsgEntity, TMsgDirection } from "@/core/domain/msg/entity";
-import { useAppContext } from "@/ui/context";
-import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
-import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
-import {
-  GET_MESSAGE_BY_CONV_ID_QUERY_KEY,
-  TGetMessagesByConvIdQueryData,
-  useGetMessagesByConvId,
-} from "@/ui/hooks/tanstack/msg";
-import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
-import { QueryClient, useQueryClient } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { Loader2, Search } from "lucide-react";
+import { IMsgEntity } from "@/core/domain/msg/entity";
 import { MessageItem } from "./MessageItem";
+import { set } from "date-fns";
 
-type TMessageListProps = {
-  receiverUserId: string;
+type TMessageList2Props = {
+  messages: IMsgEntity[];
+  allMessagesCount: number;
+  firstMessageId: number;
+  lastMessageId: number;
+  isLoadingTop?: boolean;
+  isLoadingBottom?: boolean;
+  highlightedMessageId?: string | null;
+  highlightedMessageText?: string | null;
+  currentUserId: string;
+  isCanLoadMoreTop?: boolean;
+  isCanLoadMoreBottom?: boolean;
+  onLoadMoreTop?: () => Promise<void>;
+  onLoadMoreBottom?: () => Promise<void>;
+  onSearchMessage?: (messageId: number) => Promise<void>;
 };
 
-const updateMessageInCache = (
-  payload: IMsgEntity,
-  queryClient: QueryClient,
-  conversationId?: string | null,
-  limit: number = 20,
-  direction: TMsgDirection = "older"
-) => {
-  if (!conversationId) return;
-  queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
-    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, direction],
-    (oldData) => {
-      if (!oldData || !oldData.pages) return oldData;
-      const rs = {
-        ...oldData,
-        pages: oldData.pages.map((page) =>
-          page
-            ? {
-                ...page,
-                data: page.data.map((msg) =>
-                  msg.localId === payload.localId
-                    ? { ...msg, status: payload.status }
-                    : msg
-                ),
-              }
-            : page
-        ),
-      };
-      return rs;
+const MessageList = ({
+  messages,
+  allMessagesCount,
+  firstMessageId,
+  lastMessageId,
+  isLoadingTop = false,
+  isLoadingBottom = false,
+  highlightedMessageId,
+  highlightedMessageText,
+  currentUserId,
+  isCanLoadMoreTop,
+  isCanLoadMoreBottom,
+  onLoadMoreTop,
+  onLoadMoreBottom,
+  onSearchMessage,
+}: TMessageList2Props) => {
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
+  const isInitialLoad = useRef(true);
+  const previousScrollHeight = useRef(0);
+  const shouldMaintainScroll = useRef(false);
+
+  // Scroll to bottom on initial load
+  useEffect(() => {
+    if (
+      isInitialLoad.current &&
+      messages.length > 0 &&
+      chatContainerRef.current
+    ) {
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
+      isInitialLoad.current = false;
     }
-  );
-};
 
-const addNewMessageToLastPageCache = (
-  payload: IMsgEntity,
-  queryClient: QueryClient,
-  conversationId?: string | null,
-  limit: number = 20,
-  direction: TMsgDirection = "older"
-) => {
-  if (!conversationId) return;
-  queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
-    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, direction],
-    (oldData) => {
-      if (!oldData || !oldData.pages || oldData.pages.length === 0) {
-        return {
-          pages: [
-            {
-              data: [payload],
-              nextCursor: null,
-              prevCursor: null,
-            },
-          ],
-          pageParams: [0],
-        };
+    return () => {
+      isInitialLoad.current = true;
+    };
+  }, [messages]);
+
+  // Maintain scroll position when loading more messages at top
+  useEffect(() => {
+    if (shouldMaintainScroll.current && chatContainerRef.current) {
+      const currentScrollHeight = chatContainerRef.current.scrollHeight;
+      const scrollDiff = currentScrollHeight - previousScrollHeight.current;
+
+      if (scrollDiff > 0) {
+        chatContainerRef.current.scrollTop = lastScrollTop.current + scrollDiff;
       }
 
-      const lastPageIndex = oldData.pages.length - 1;
-      const lastPage = oldData.pages[lastPageIndex];
-
-      const updatedLastPage = lastPage
-        ? {
-            ...lastPage,
-            data: [...lastPage.data, payload],
-          }
-        : {
-            data: [payload],
-            nextCursor: null,
-            prevCursor: null,
-          };
-
-      const updatedPages = [...oldData.pages];
-      updatedPages[lastPageIndex] = updatedLastPage;
-
-      return {
-        ...oldData,
-        pages: updatedPages,
-      };
+      shouldMaintainScroll.current = false;
+      previousScrollHeight.current = 0;
     }
-  );
-};
-
-export function MessageList({ receiverUserId: userId }: TMessageListProps) {
-  const queryClient = useQueryClient();
-  const { service, eventBus } = useAppContext();
-  const { currentUser } = useCurrentUserStore();
-  const { chatBoxState } = useChatWindowStore();
-
-  const {
-    data: messages = [],
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useGetMessagesByConvId(service, chatBoxState.conversationId);
-
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const rowVirtualizer = useVirtualizer({
-    count: messages.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 64,
-    overscan: 5,
-    getItemKey: (index) => messages[index]?.localId,
-  });
-
-  const measureElement = rowVirtualizer.measureElement;
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    if (target.scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  };
-
-  useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
-    updateMessageInCache(payload, queryClient, chatBoxState.conversationId);
-  });
-
-  useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
-    addNewMessageToLastPageCache(payload, queryClient, payload.conversationId);
-    requestAnimationFrame(() => {
-      const totalSize = rowVirtualizer.getTotalSize();
-      parentRef.current?.scrollTo({ top: totalSize + 16 });
-    });
-  });
+  }, [messages]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      requestAnimationFrame(() => {
-        const totalSize = rowVirtualizer.getTotalSize();
-        parentRef.current?.scrollTo({ top: totalSize + 16 });
-      });
+    if (highlightedMessageId) {
+      setTimeout(() => {
+        const targetElement = document.getElementById(
+          `msg-${highlightedMessageId}`
+        );
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 100);
     }
-  }, [messages.length, rowVirtualizer]);
+  }, [highlightedMessageId]);
 
-  if (!currentUser) return null;
+  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+
+    // Load more at top
+    if (
+      scrollTop < 100 &&
+      scrollTop < lastScrollTop.current &&
+      onLoadMoreTop &&
+      !isLoadingTop &&
+      firstMessageId
+    ) {
+      shouldMaintainScroll.current = true;
+      previousScrollHeight.current = scrollHeight;
+
+      console.log("Loading more messages at top...");
+
+      await onLoadMoreTop();
+    }
+
+    // Load more at bottom
+    if (
+      scrollHeight - scrollTop - clientHeight < 100 &&
+      scrollTop > lastScrollTop.current &&
+      onLoadMoreBottom &&
+      !isLoadingBottom &&
+      lastMessageId < allMessagesCount
+    ) {
+      await onLoadMoreBottom();
+    }
+
+    lastScrollTop.current = scrollTop;
+  };
+
+  const handleSearch = () => {};
 
   return (
-    <div
-      ref={parentRef}
-      className="flex-1 h-full px-6 py-4 bg-gray-50 overflow-y-auto"
-      onScroll={handleScroll}
-    >
+    <div className="flex flex-col h-full bg-gray-100">
       <div
-        style={{
-          height: rowVirtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
+        ref={chatContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3"
       >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const message = messages[virtualRow.index];
+        {isLoadingTop && (
+          <div className="flex justify-center py-2">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          </div>
+        )}
+        {isCanLoadMoreBottom && (
+          <div className="text-center text-gray-500 text-sm py-2">
+            📌 The oldest message
+          </div>
+        )}
+        {messages.map((message) => {
+          const isCurrentUser = message.senderId === currentUserId;
           return (
             <div
-              key={message.localId}
-              ref={(el) => {
-                if (el) measureElement(el);
-              }}
-              data-index={virtualRow.index}
-              className="absolute top-0 left-0 w-full py-0.5"
-              style={{
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
+              key={message.localId || message.id}
+              id={`msg-${message.id || message.localId}`}
+              className="mb-3"
             >
               <MessageItem
                 message={message}
-                isCurrentUser={message.senderId === currentUser.id}
+                isCurrentUser={isCurrentUser}
+                hightLightId={highlightedMessageId}
+                highLigthtText={highlightedMessageText}
               />
             </div>
           );
         })}
+        {isLoadingBottom && (
+          <div className="flex justify-center py-2">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          </div>
+        )}
+        {isCanLoadMoreTop && (
+          <div className="text-center text-gray-500 text-sm py-2">
+            📌 Latest Message
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};
+
+export default MessageList;

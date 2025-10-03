@@ -10,19 +10,18 @@ const createFtsTableSQL = (db: OpfsDatabase) => {
   try {
     db.exec(`
       CREATE VIRTUAL TABLE fts_index_global USING fts5(
-        message_id UNINDEXED,
-        conversation_id UNINDEXED,
+        messageId UNINDEXED,
+        conversationId UNINDEXED,
         senderId UNINDEXED,
+        receiverId UNINDEXED,
         content,
-        created_at UNINDEXED,
+        createdAt UNINDEXED,
         tokenize = 'unicode61 remove_diacritics 2',
         prefix = 1,
         prefix = 2,
         prefix = 3
       );
     `);
-
-    console.log("Successfully created fts_index_global table");
   } catch (error) {
     console.error("Failed to create fts_index_global table:", error);
     throw error;

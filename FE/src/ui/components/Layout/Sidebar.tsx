@@ -1,11 +1,11 @@
-import { useState, useCallback } from "react";
+import { ISearchRawResultItem } from "@/core/domain/search/entity";
 import { useAppContext } from "@/ui/context";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetUserById } from "@/ui/hooks/tanstack/user";
-import { SearchResult } from "@/ui/hooks/useSearchMessages";
 import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, RefreshCcw, Trash } from "lucide-react";
+import { useCallback, useState } from "react";
 import { Button } from "../core/Button";
 import {
   ContextMenu,
@@ -33,6 +33,7 @@ export function Sidebar() {
   const queryClient = useQueryClient();
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { setChatBoxState } = useChatWindowStore();
+
   const { mutateAsync } = useGetUserById(service);
 
   const closeSearch = useCallback(() => setIsSearchOpen(false), []);
@@ -45,13 +46,13 @@ export function Sidebar() {
   }, [socket, setCurrentUser, setChatBoxState, queryClient]);
 
   const handleMessageClick = useCallback(
-    async (result: SearchResult, temp: string) => {
-      if (!result.conversation_id || !result.sender_id) return;
+    async (result: ISearchRawResultItem, temp: string) => {
+      if (!result.conversationId || !result.senderId) return;
       try {
-        const receiverUser = await mutateAsync(result.sender_id);
+        const receiverUser = await mutateAsync(result.senderId);
         setChatBoxState({
           receiverUser,
-          conversationId: result.conversation_id,
+          conversationId: result.conversationId,
           highlightedMessageId: result.id,
           highlightedMessageText: temp,
         });

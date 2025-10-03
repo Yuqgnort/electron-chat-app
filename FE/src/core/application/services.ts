@@ -248,6 +248,7 @@ export const prefixSearchAndGetRawData = async (
   const startTime = Date.now();
   try {
     const indexResults = await prefixSearch(searchRepo, query, rank);
+
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
@@ -314,15 +315,19 @@ export const getSearchRawResult = async (
   const rs = await transactionManager.executeInTransaction(
     ["users", "messages"],
     async () => {
-      const msg = await getMsgById(msgRepo, searchItem.id);
+      const msg = await getMsgById(msgRepo, searchItem.messageId);
       if (!msg) return null;
       const sender = await getUserById(userRepo, msg.senderId);
-      const rs = createSearchRawItem(
+      const receiver = await getUserById(userRepo, msg.receiverId);
+      const rs = createSearchRawItem({
         msg,
-        sender?.name || "Unknown",
-        searchItem.rank,
-        searchItem.highlight
-      );
+        receiverId: msg.receiverId,
+        receiverName: receiver?.name || "unknown",
+        senderId: msg.senderId,
+        senderName: sender?.name || "unknown",
+        rank: searchItem.rank,
+        highlight: "",
+      });
       return rs;
     }
   );

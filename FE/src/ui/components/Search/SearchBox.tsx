@@ -1,13 +1,19 @@
-import { ISearchRawResultItem } from "@/core/domain/search/entity";
+import {
+  ESearchType,
+  ISearchQuery,
+  ISearchRawResultItem,
+} from "@/core/domain/search/entity";
+import { useAppContext } from "@/ui/context";
+import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
+import { useGetUsersWithIgnoreIds } from "@/ui/hooks/tanstack/user";
 import { useDebounce } from "@/ui/hooks/useDebounce";
 import {
   useSearchExactPhraseQuery,
   useSearchMessagesQuery,
-  type SearchResult,
 } from "@/ui/hooks/useSearchMessages";
 import { formatDistanceToNow } from "date-fns";
 import { Filter, MessageSquare, Search, X } from "lucide-react";
-import { JSX, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../core/Button";
 import { Checkbox } from "../core/Checkbox";
 import { Input } from "../core/Input";
@@ -19,21 +25,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../core/Select";
+import Snippet from "./Snippet";
 
 interface SearchBoxProps {
   isOpen: boolean;
   onClose: () => void;
-  onMessageClick?: (result: SearchResult, temp: string) => void;
+  onMessageClick?: (result: ISearchRawResultItem, temp: string) => void;
 }
 
 export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const [isFilterVisible, setIsFilterVisible] = useState(false);
+  const { service } = useAppContext();
+  const { currentUser } = useCurrentUserStore();
 
-  const [searchParams, setSearchParams] = useState({
+  const [searchParams, setSearchParams] = useState<ISearchQuery>({
+    currentUserId: currentUser?.id || "",
+    limit: 50,
+    type: ESearchType.FULL_TEXT,
     query: "",
-    filters: { limit: 50, conversationId: undefined as string | undefined },
-    isExactPhrase: false,
+    userId: undefined,
   });
+
+  const { data: users = [] } = useGetUsersWithIgnoreIds(
+    service,
+    currentUser ? [currentUser.id] : []
+  );
 
   const debouncedSearchParams = useDebounce(searchParams, 300);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,11 +59,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     isFetching: isFetchingFuzzy,
     error: fuzzyError,
   } = useSearchMessagesQuery({
-    query: debouncedSearchParams.query,
-    filters: debouncedSearchParams.filters,
-    enabled:
-      !!debouncedSearchParams.query.trim() &&
-      !debouncedSearchParams.isExactPhrase,
+    query: debouncedSearchParams,
   });
 
   const {
@@ -55,97 +67,41 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     isFetching: isFetchingExact,
     error: exactError,
   } = useSearchExactPhraseQuery({
-    query: debouncedSearchParams.query,
-    filters: debouncedSearchParams.filters,
-    enabled:
-      !!debouncedSearchParams.query.trim() &&
-      debouncedSearchParams.isExactPhrase,
+    query: debouncedSearchParams,
   });
 
-  const activeResults = debouncedSearchParams.isExactPhrase
-    ? exactPhraseResults?.items
-    : fuzzyResults?.items;
+  const activeResults =
+    debouncedSearchParams.type === ESearchType.EXACT_PHRASE
+      ? exactPhraseResults?.items
+      : fuzzyResults?.items;
 
-  const fetchError = debouncedSearchParams.isExactPhrase
-    ? exactError
-    : fuzzyError;
+  console.log("SearchBox render with params:", activeResults);
+
+  const fetchError =
+    debouncedSearchParams.type === ESearchType.EXACT_PHRASE
+      ? exactError
+      : fuzzyError;
   const isFetching = isFetchingFuzzy || isFetchingExact;
   const hasResults = activeResults && activeResults.length > 0;
   const isEmpty =
     !hasResults && !isFetching && !!debouncedSearchParams.query.trim();
 
-  console.log(activeResults);
-
   const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
-    // onMessageClick?.(result, tempt);
+    onMessageClick?.(result, tempt);
     onClose();
   };
 
-  function normalizeForSearch(str: string): string {
-    return str
-      .toLowerCase()
-      .normalize("NFD") // tách dấu
-      .replace(/[\u0300-\u036f]/g, "") // bỏ dấu
-      .replace(/đ/g, "d")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function buildMapping(original: string) {
-    const mapping: number[] = [];
-    const normalized = [];
-
-    let normIndex = 0;
-    for (let i = 0; i < original.length; i++) {
-      const c = original[i];
-      const normC = c
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d");
-
-      for (let j = 0; j < normC.length; j++) {
-        mapping[normIndex++] = i; // vị trí này trong normalize thuộc về original[i]
-        normalized.push(normC[j]);
-      }
+  const handleSelectUser = async (userId: string) => {
+    try {
+      if (!currentUser) return;
+      setSearchParams((prev) => ({
+        ...prev,
+        userId: userId ? userId : undefined,
+      }));
+    } catch (error) {
+      console.error("Error selecting user:", error);
     }
-    return { normStr: normalized.join(""), mapping };
-  }
-
-  function highlight(text: string, keyword: string): JSX.Element {
-    if (!keyword) return <>{text}</>;
-
-    const { normStr, mapping } = buildMapping(text);
-    const normKw = normalizeForSearch(keyword);
-
-    const elements: JSX.Element[] = [];
-    let lastOriginalIdx = 0;
-    let key = 0;
-
-    let idx = normStr.indexOf(normKw);
-    while (idx !== -1) {
-      const startOrig = mapping[idx];
-      const endOrig = mapping[idx + normKw.length - 1] + 1;
-      if (startOrig > lastOriginalIdx) {
-        elements.push(
-          <span key={key++}>{text.slice(lastOriginalIdx, startOrig)}</span>
-        );
-      }
-      elements.push(
-        <mark key={key++} className="bg-yellow-200">
-          {text.slice(startOrig, endOrig)}
-        </mark>
-      );
-
-      lastOriginalIdx = endOrig;
-      idx = normStr.indexOf(normKw, idx + normKw.length);
-    }
-    if (lastOriginalIdx < text.length) {
-      elements.push(<span key={key++}>{text.slice(lastOriginalIdx)}</span>);
-    }
-
-    return <>{elements}</>;
-  }
+  };
 
   const formatDate = (date: string | number) => {
     const timestamp = Number(date);
@@ -159,7 +115,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentUser) return null;
 
   return (
     <div className="flex flex-col h-full">
@@ -195,11 +151,13 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="exactPhrase"
-                checked={searchParams.isExactPhrase}
+                checked={searchParams.type === ESearchType.EXACT_PHRASE}
                 onCheckedChange={(checked) =>
                   setSearchParams((prev) => ({
                     ...prev,
-                    isExactPhrase: Boolean(checked),
+                    type: checked
+                      ? ESearchType.EXACT_PHRASE
+                      : ESearchType.FULL_TEXT,
                   }))
                 }
               />
@@ -210,22 +168,14 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
                 Exact phrase
               </label>
             </div>
-            <Select
-              value={String(searchParams.filters.limit)}
-              onValueChange={(val) =>
-                setSearchParams((prev) => ({
-                  ...prev,
-                  filters: { ...prev.filters, limit: parseInt(val, 10) },
-                }))
-              }
-            >
-              <SelectTrigger className="w-[120px] h-7!">
-                <SelectValue placeholder="Limit results" />
+            <Select onValueChange={(value) => handleSelectUser(value)}>
+              <SelectTrigger className="w-[140px] h-6!">
+                <SelectValue placeholder="Select a user" />
               </SelectTrigger>
               <SelectContent>
-                {[10, 25, 50, 100].map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n} results
+                {users?.map((u) => (
+                  <SelectItem key={u.id} value={u.id.toString()}>
+                    {u.userName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -279,21 +229,34 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
                   <div className="flex items-start space-x-3">
                     <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-medium">
-                        {msg.senderName.charAt(0).toUpperCase()}
+                        {(msg.senderId === currentUser.id
+                          ? msg.receiverName
+                          : msg.senderName
+                        )
+                          .charAt(0)
+                          .toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-normal text-gray-500 text-sm">
-                          {msg.senderName}
+                          {msg.senderId === currentUser.id
+                            ? msg.receiverName
+                            : msg.senderName}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {formatDate(msg.createdAt)}
                         </span>
                       </div>
-                      <p className="text-sm  line-clamp-2">
-                        {highlight(msg.content, searchParams.query)}
-                      </p>
+                      <div className="flex items-start gap-1 line-clamp-1 w-full">
+                        {msg.senderId === currentUser.id && (
+                          <p className="font-medium text-sm">You:</p>
+                        )}
+                        <Snippet
+                          text={msg.content}
+                          keywords={[searchParams.query]}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

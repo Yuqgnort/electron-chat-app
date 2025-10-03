@@ -18,6 +18,31 @@ import { useGetUsers } from "./hooks/tanstack/user";
 import { useCheckIsOnNetwork } from "./hooks/useCheckIsOnline";
 import { useConnectSocket } from "./hooks/useConnectSocket";
 
+const mockCreate100Messages = async (
+  service: any,
+  convId: string,
+  userIds: string[]
+) => {
+  for (let i = 0; i < 200; i++) {
+    try {
+      await service.msg.sendMessage({
+        content: `Message ${i + 1} from User ${userIds[0]} to User ${userIds[1]}`,
+        conversationId: convId,
+        senderId: userIds[0],
+        receiverId: userIds[1],
+        serverId: null,
+        status: EMsgStatus.PENDING,
+      });
+
+      // Add a small delay to prevent race conditions
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error(`Failed to send message ${i + 1}:`, error);
+      // Continue with next message even if one fails
+    }
+  }
+};
+
 ////////////////////
 
 export function App() {
@@ -62,14 +87,18 @@ export function App() {
       return;
     try {
       const conversationId = await ensureConversationId();
-      await service.msg.sendMessage({
-        content,
-        conversationId,
-        senderId: currentUser.id,
-        receiverId: chatBoxState.receiverUser.id,
-        serverId: null,
-        status: EMsgStatus.PENDING,
-      });
+      await mockCreate100Messages(service, conversationId, [
+        currentUser.id,
+        chatBoxState.receiverUser.id,
+      ]);
+      // await service.msg.sendMessage({
+      //   content,
+      //   conversationId,
+      //   senderId: currentUser.id,
+      //   receiverId: chatBoxState.receiverUser.id,
+      //   serverId: null,
+      //   status: EMsgStatus.PENDING,
+      // });
       await queryClient.invalidateQueries({
         queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser.id],
       });

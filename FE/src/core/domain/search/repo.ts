@@ -19,13 +19,6 @@ export interface ISearchRepository {
 
   // Index operations
   indexMessage(messageData: IMessageIndexData): Promise<void>;
-  updateMessageInIndex(
-    messageId: TID,
-    content: string,
-    senderName: string,
-    senderId?: TID
-  ): Promise<void>;
-  removeMessageFromIndex(messageId: TID): Promise<void>;
 
   // Bulk operations
   bulkIndexMessages(messages: IMessageIndexData[]): Promise<void>;

@@ -1,6 +1,5 @@
 import { withErrorHandling } from "./core/application/error";
 import { createInMemoryEventBus } from "./core/application/eventbus";
-import { debugHandlerRegistry } from "./core/application/handler-debug";
 import {
   autoIndexMessageHandler,
   indexExistingMessages,
@@ -105,9 +104,8 @@ export async function bootstrap() {
     socket
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
-  debugHandlerRegistry();
   autoIndexMessageHandler(eventBus, searchRepo);
-  indexExistingMessages(msgRepo, searchRepo);
+  // indexExistingMessages(msgRepo, searchRepo);
 
   const service = createAppService(
     {

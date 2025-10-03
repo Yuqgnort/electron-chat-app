@@ -4,7 +4,7 @@ import { createInitMsg, EMsgStatus } from "@/core/domain/msg/entity";
 import { IMsgRepo } from "@/core/domain/msg/repo";
 import { IPendingMsgEntity } from "@/core/domain/pending-msg/entity";
 import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
-import { IUserRepo } from "@/core/domain/user/repo";
+import { createNormalizeSearchString } from "@/core/domain/search/entity";
 import { ISearchRepository } from "@/core/domain/search/repo";
 import { assertExists, withErrorHandling } from "../error";
 import { IEventBus } from "../eventbus";
@@ -13,8 +13,6 @@ import { ICommunicationManager, ITransactionManager } from "../services-facade";
 import { updateConvLastMessageId } from "../usecase/conv.uc";
 import { createMsg, setMsgDelivered, setMsgSent } from "../usecase/msg.uc";
 import { getAllPendingMsgs, removePendingMsg } from "../usecase/pending-msg.uc";
-import { globalHandlerRegistry } from "../handler-registry";
-import { createNormalizeSearchString } from "@/core/domain/search/entity";
 
 class MessageProcessingManager {
   private locks = new Map<string, Promise<void>>();
@@ -99,16 +97,7 @@ export const updateLastMsgHandler = (
   eventBus: IEventBus,
   convRepo: IConvRepo
 ) => {
-  const handlerName = "updateLastMsgHandler";
-
-  if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(
-      `[${handlerName}] Already registered, skipping duplicate registration`
-    );
-    return;
-  }
-
-  const unsubscriber = eventBus.subscribe(
+  return eventBus.subscribe(
     "MsgCreated",
     withErrorHandling(async ({ payload }) => {
       await messageProcessingManager.withConversationLock(
@@ -131,8 +120,6 @@ export const updateLastMsgHandler = (
       );
     }, "updateLastMsgHandler")
   );
-
-  globalHandlerRegistry.register(handlerName, unsubscriber);
 };
 
 export const updateMsgAckHandler = (
@@ -140,41 +127,34 @@ export const updateMsgAckHandler = (
   msgRepo: IMsgRepo,
   pendingMsgRepo: IPendingMsgRepo
 ) => {
-  const handlerName = "updateMsgAckHandler";
-
-  if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(
-      `[${handlerName}] Already registered, skipping duplicate registration`
-    );
-    return;
-  }
-
-  const unsubscriber = eventBus.subscribe(
+  return eventBus.subscribe(
     "msg:ack",
     withErrorHandling(async ({ payload }) => {
-      console.log(
-        `[updateMsgAckHandler] Processing ack for localId: ${payload.localId}, serverId: ${payload.serverId}`
-      );
-
       await messageProcessingManager.withLocalIdLock(
         payload.localId,
         async () => {
-          const msgAck = assertExists(
-            await msgRepo.getByLocalId(payload.localId),
-            `Message with localId ${payload.localId} not found for ack update`
-          );
+          // Double-check the message still exists and hasn't been processed
+          const msgAck = await msgRepo.getByLocalId(payload.localId);
+          if (!msgAck) {
+            console.warn(
+              `[updateMsgAckHandler] Message with localId ${payload.localId} not found, may have been processed already`
+            );
+            return;
+          }
+
+          // Check if message already has a serverId to avoid duplicate processing
+          if (msgAck.serverId && msgAck.serverId === payload.serverId) {
+            console.log(
+              `[updateMsgAckHandler] Message with localId ${payload.localId} already has serverId ${payload.serverId}, skipping update`
+            );
+            return;
+          }
+
           const msg = { ...msgAck, serverId: payload.serverId };
           const newMsg = await setMsgSent(msgRepo, msg);
 
-          // Remove pending message since it's now successfully sent
           try {
-            console.log(
-              `[updateMsgAckHandler] Attempting to remove pending message for localId: ${payload.localId}`
-            );
             await removePendingMsg(pendingMsgRepo, payload.localId);
-            console.log(
-              `[updateMsgAckHandler] ✅ Successfully removed pending message for localId: ${payload.localId}`
-            );
             eventBus.publish({
               type: "PendingMsgRemoved",
               payload: { localId: payload.localId },
@@ -184,36 +164,20 @@ export const updateMsgAckHandler = (
               `[updateMsgAckHandler] ❌ Failed to remove pending message for localId ${payload.localId}:`,
               error
             );
-            // Don't fail the entire operation if pending message removal fails
           }
 
           eventBus.publish({ type: "MsgUpdated", payload: newMsg });
-          console.log(
-            `[updateMsgAckHandler] ✅ Message ${payload.localId} marked as sent`
-          );
-          return newMsg;
         }
       );
     }, "updateMsgAckHandler")
   );
-
-  globalHandlerRegistry.register(handlerName, unsubscriber);
 };
 
 export const updateMsgDeliveredHandler = (
   eventBus: IEventBus,
   msgRepo: IMsgRepo
 ) => {
-  const handlerName = "updateMsgDeliveredHandler";
-
-  if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(
-      `[${handlerName}] Already registered, skipping duplicate registration`
-    );
-    return;
-  }
-
-  const unsubscriber = eventBus.subscribe(
+  return eventBus.subscribe(
     "msg:delivered",
     withErrorHandling(async ({ payload }) => {
       await messageProcessingManager.withServerIdLock(
@@ -230,8 +194,6 @@ export const updateMsgDeliveredHandler = (
       );
     }, "updateMsgDeliveredHandler")
   );
-
-  globalHandlerRegistry.register(handlerName, unsubscriber);
 };
 
 export const updateMsgIncomingHandler = (
@@ -242,108 +204,127 @@ export const updateMsgIncomingHandler = (
   transactionManager: ITransactionManager,
   communicationManager: ICommunicationManager
 ) => {
-  const handlerName = "updateMsgIncomingHandler";
-
-  if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(
-      `[${handlerName}] Already registered, skipping duplicate registration`
-    );
-    return;
-  }
-
-  const unsubscriber = eventBus.subscribe(
+  return eventBus.subscribe(
     "msg:incoming",
     withErrorHandling(async ({ payload }) => {
-      console.log("[MsgIncomingHandler] Received incoming message:", payload);
-
-      await messageProcessingManager.withUserPairLock(
-        payload.senderId,
-        payload.receiverId,
-        async () => {
-          let conv = await convRepo.getConvByUserIds([
-            payload.senderId,
-            payload.receiverId,
-          ]);
-          if (!conv) {
-            const result = assertExists(
-              await createConvWithParticipants(
-                { title: "New Conversation" },
-                [payload.senderId, payload.receiverId],
-                convRepo,
-                convPartRepo,
-                eventBus,
-                transactionManager
-              ),
-              "Failed to create conversation for incoming message"
-            );
-            conv = result.conv;
-            await eventBus.publishAsync({ type: "ConvCreated", payload: conv });
-          }
-
-          // Check if message already exists by serverId to avoid duplicates
-          if (payload.serverId) {
+      if (payload.serverId) {
+        await messageProcessingManager.withServerIdLock(
+          payload.serverId,
+          async () => {
             const existingMsg = await msgRepo.getByServerId(payload.serverId);
             if (existingMsg) {
               console.log(
                 `[MsgIncomingHandler] Message with serverId ${payload.serverId} already exists, skipping creation`
               );
-              return { newMsg: existingMsg, updatedConv: conv };
+              return;
             }
-          }
 
-          const initNewMsg = createInitMsg({
-            content: payload.content,
-            conversationId: conv.id,
-            senderId: payload.senderId,
-            receiverId: payload.receiverId,
-            serverId: payload.serverId,
-            status: EMsgStatus.DELIVERED,
-          });
-
-          const newMsg = assertExists(
-            await createMsg(msgRepo, initNewMsg),
-            "Failed to create incoming message"
-          );
-          await eventBus.publishAsync({ type: "MsgCreated", payload: newMsg });
-          const updatedConv = assertExists(
-            await updateConvLastMessageId(convRepo, conv, newMsg.id),
-            `Failed to update last message for conversation ${conv.id}`
-          );
-          await eventBus.publishAsync({
-            type: "ConvLastMessageChanged",
-            payload: updatedConv,
-          });
-
-          if (newMsg.serverId) {
-            await communicationManager.deliverMessage({
-              serverId: newMsg.serverId,
+            await processIncomingMessage(payload, {
+              eventBus,
+              msgRepo,
+              convRepo,
+              convPartRepo,
+              transactionManager,
+              communicationManager,
             });
           }
-
-          return { newMsg, updatedConv };
-        }
-      );
+        );
+      } else {
+        await messageProcessingManager.withUserPairLock(
+          payload.senderId,
+          payload.receiverId,
+          async () => {
+            await processIncomingMessage(payload, {
+              eventBus,
+              msgRepo,
+              convRepo,
+              convPartRepo,
+              transactionManager,
+              communicationManager,
+            });
+          }
+        );
+      }
     }, "updateMsgIncomingHandler")
   );
-
-  globalHandlerRegistry.register(handlerName, unsubscriber);
 };
+
+async function processIncomingMessage(
+  payload: any,
+  deps: {
+    eventBus: IEventBus;
+    msgRepo: IMsgRepo;
+    convRepo: IConvRepo;
+    convPartRepo: IConvPartRepo;
+    transactionManager: ITransactionManager;
+    communicationManager: ICommunicationManager;
+  }
+): Promise<void> {
+  const {
+    eventBus,
+    msgRepo,
+    convRepo,
+    convPartRepo,
+    transactionManager,
+    communicationManager,
+  } = deps;
+
+  let conv = await convRepo.getConvByUserIds([
+    payload.senderId,
+    payload.receiverId,
+  ]);
+  if (!conv) {
+    const result = assertExists(
+      await createConvWithParticipants(
+        { title: "New Conversation" },
+        [payload.senderId, payload.receiverId],
+        convRepo,
+        convPartRepo,
+        eventBus,
+        transactionManager
+      ),
+      "Failed to create conversation for incoming message"
+    );
+    conv = result.conv;
+    await eventBus.publishAsync({ type: "ConvCreated", payload: conv });
+  }
+
+  const initNewMsg = createInitMsg({
+    content: payload.content,
+    conversationId: conv.id,
+    senderId: payload.senderId,
+    receiverId: payload.receiverId,
+    serverId: payload.serverId,
+    status: EMsgStatus.DELIVERED,
+  });
+
+  const newMsg = assertExists(
+    await createMsg(msgRepo, initNewMsg),
+    "Failed to create incoming message"
+  );
+  await eventBus.publishAsync({ type: "MsgCreated", payload: newMsg });
+  const updatedConv = assertExists(
+    await updateConvLastMessageId(convRepo, conv, newMsg.id),
+    `Failed to update last message for conversation ${conv.id}`
+  );
+  await eventBus.publishAsync({
+    type: "ConvLastMessageChanged",
+    payload: updatedConv,
+  });
+
+  if (newMsg.serverId) {
+    await communicationManager.deliverMessage({
+      serverId: newMsg.serverId,
+    });
+  }
+}
 
 export const retrySendingPendingMessagesHandler = (
   pendingMsgRepo: IPendingMsgRepo,
   eventBus: IEventBus,
   communicationManager: ICommunicationManager
 ) => {
-  const handlerName = "retrySendingPendingMessagesHandler";
-
-  if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(
-      `[${handlerName}] Already registered, skipping duplicate registration`
-    );
-    return;
-  }
-
-  const unsubscriber = eventBus.subscribe(
+  return eventBus.subscribe(
     "connect",
     withErrorHandling(async () => {
       await messageProcessingManager.withDebounce(
@@ -367,14 +348,12 @@ export const retrySendingPendingMessagesHandler = (
               });
             }
           }
-
           if (errors.length > 0) {
             throw new AggregateError(
               errors,
               `[RetryPendingMessages] ${errors.length} messages failed to resend`
             );
           }
-
           return {
             processedCount: pendingMsgs.length,
             errorCount: errors.length,
@@ -383,8 +362,6 @@ export const retrySendingPendingMessagesHandler = (
       );
     }, "retrySendingPendingMessagesHandler")
   );
-
-  globalHandlerRegistry.register(handlerName, unsubscriber);
 };
 
 async function retrySinglePendingMsg(
@@ -423,12 +400,7 @@ export const autoIndexMessageHandler = (
   eventBus: IEventBus,
   searchRepo: ISearchRepository
 ) => {
-  const handlerName = "autoIndexMessageHandler";
-  if (globalHandlerRegistry.isRegistered(handlerName)) {
-    console.log(`[${handlerName}] Already registered`);
-    return;
-  }
-  const unsubscriber = eventBus.subscribe(
+  return eventBus.subscribe(
     "MsgCreated",
     withErrorHandling(async ({ payload: msg }) => {
       const isAlreadyIndexed = await searchRepo.isMessageIndexed(msg.id);
@@ -441,10 +413,10 @@ export const autoIndexMessageHandler = (
         conversationId: msg.conversationId,
         createdAt: msg.createdAt,
         senderId: msg.senderId,
+        receiverId: msg.receiverId,
       });
     }, "autoIndexMessageHandler")
   );
-  globalHandlerRegistry.register(handlerName, unsubscriber);
 };
 
 export const indexExistingMessages = async (
@@ -480,6 +452,7 @@ export const indexExistingMessages = async (
           createdAt: msg.createdAt,
           senderId: msg.senderId,
           content: createNormalizeSearchString(msg.content),
+          receiverId: msg.receiverId,
         });
 
         indexed++;

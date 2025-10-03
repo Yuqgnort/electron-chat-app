@@ -229,10 +229,10 @@ SELECT
 
 ```sql
 -- When FTS index fails, fallback to LIKE search in raw data
-SELECT message_id, content, created_at
+SELECT messageId, content, createdAt
 FROM messages
-WHERE content LIKE '%search_term%' AND conversation_id = ?
-ORDER BY created_at DESC
+WHERE content LIKE '%search_term%' AND conversationId = ?
+ORDER BY createdAt DESC
 LIMIT 20;
 
 ```
@@ -263,7 +263,7 @@ When user performs a search:
 1. **User Input**: User enters query into Search UI
 2. **Query Processing**: Search Service receives request and sends to Query Parser
 3. **Query Parsing**: Parser analyzes query, determines search mode (exact/fuzzy/boolean)
-4. **Index Search**: Execute FTS query on Inverted Index, return list of message_id and raw scores
+4. **Index Search**: Execute FTS query on Inverted Index, return list of messageId and raw scores
 5. **Metadata Enrichment**: Search Service fetches additional information from Messages DB (sender, conversation, timestamp)
 6. **Result Ranking**: Result Ranker applies business rules to calculate final score
 7. **Response**: Return ranked results to UI for display
@@ -283,7 +283,7 @@ sequenceDiagram
     SS->>QP: Parse query
     QP-->>SS: Parsed SearchQuery
     SS->>FTS: Execute FTS query
-    FTS-->>SS: Raw results (message_ids + scores)
+    FTS-->>SS: Raw results (messageIds + scores)
     SS->>DB: Fetch message metadata
     DB-->>SS: Message details
     SS->>RR: Apply ranking rules
@@ -366,23 +366,23 @@ sequenceDiagram
 
 ```sql
 CREATE VIRTUAL TABLE fts_index_global USING fts5(
-    message_id UNINDEXED,
-    conversation_id UNINDEXED,
+    messageId UNINDEXED,
+    conversationId UNINDEXED,
     content,
-    created_at UNINDEXED,
+    createdAt UNINDEXED,
 );
 ```
 
-- `message_id`: unique key mapping to main DB
+- `messageId`: unique key mapping to main DB
 - `conversation_id`: filter by conversation
 - `content`: content for search
-- `created_at`: support filtering or ranking by time
+- `createdAt`: support filtering or ranking by time
 
 **Conversation Metadata Table**
 
 ```sql
 CREATE TABLE conversation_meta (
-    conversation_id INTEGER PRIMARY KEY,
+    conversationId INTEGER PRIMARY KEY,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     last_message_at INTEGER,
 );
@@ -458,8 +458,8 @@ Final Score = (w1 × Recency Boost) + (w2 × Conversation Activity Score)
 ```sql
 CREATE INDEX idx_fts_active_conversations
 ON fts_index_global(conversation_id)
-WHERE conversation_id IN (
-    SELECT conversation_id FROM conversation_meta
+WHERE conversationId IN (
+    SELECT conversationId FROM conversation_meta
     WHERE is_deleted = 0 AND last_message_at > unixepoch('now') - 2592000
 );
 ```
@@ -479,10 +479,10 @@ Data will be compressed to reduce DB size:
 
 ```sql
 CREATE VIRTUAL TABLE fts_index_global USING fts5(
-    message_id UNINDEXED,
-    conversation_id UNINDEXED,
+    messageId UNINDEXED,
+    conversationId UNINDEXED,
     content,
-    created_at UNINDEXED,
+    createdAt UNINDEXED,
     compress='zlib',
     uncompress='zlib'
 );
@@ -501,7 +501,7 @@ INSERT INTO fts_index_global(fts_index_global) VALUES('optimize');
 Limit result count to avoid memory spikes and reduce latency with large datasets:
 
 ```sql
-SELECT message_id, final_score
+SELECT messageId, final_score
 FROM search_results_view
 WHERE final_score >= ?
 ORDER BY final_score DESC

@@ -1,4 +1,3 @@
-import { IPendingMsgEntity } from "@/core/domain/pending-msg/entity";
 import { IPendingMsgRepo } from "@/core/domain/pending-msg/repo";
 import { genUUID } from "../helper";
 import { ChatDb } from "../init";

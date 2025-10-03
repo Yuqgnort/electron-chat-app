@@ -212,20 +212,20 @@ erDiagram
         date dob
         text bio
         enum gender
-        date created_at
+        date createdAt
     }
 
     CONVERSATIONS {
         bigint id PK
         string title
         enum type
-        bigint last_message_id FK
+        bigint last_messageId FK
         date updated_at
     }
 
     CONVERSATION_PARTICIPANTS {
         bigint id PK
-        bigint conversation_id FK
+        bigint conversationId FK
         bigint user_id FK
         date joined_at
         bool is_hidden
@@ -237,10 +237,10 @@ erDiagram
         bigint id PK
         string local_id
         string server_id
-        bigint conversation_id FK
-        bigint sender_id FK
+        bigint conversationId FK
+        bigint senderId FK
         text content
-        date created_at
+        date createdAt
         enum status
     }
 
@@ -256,7 +256,7 @@ erDiagram
 - **CONVERSATIONS ||--o{ CONVERSATION_PARTICIPANTS:** A conversation can have many participants.
 - **CONVERSATIONS ||--o{ MESSAGES:** A conversation contains many messages.
 - **USERS ||--o{ MESSAGES:** A user can send many messages.
-- **MESSAGES ||--o{ CONVERSATIONS : "last_message":** A conversation can reference the last message through `last_message_id`. This is a special 1-1 relationship to make displaying the latest message more efficient.
+- **MESSAGES ||--o{ CONVERSATIONS : "last_message":** A conversation can reference the last message through `last_messageId`. This is a special 1-1 relationship to make displaying the latest message more efficient.
 
 ---
 

@@ -38,6 +38,7 @@ export const createConv = withErrorHandling(
       ...conv,
       key: userIds.sort().join(":"),
     });
+
     const newConv = assertExists(
       await convRepo.createConv(initNewConv),
       "Failed to create conversation"

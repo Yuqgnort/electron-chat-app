@@ -198,7 +198,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}', '${messageData.receiverId}')
       `;
 
-      console.log("Indexing message:", sql);
+      // console.log("Indexing message:", sql);
 
       await db.exec(sql);
     },

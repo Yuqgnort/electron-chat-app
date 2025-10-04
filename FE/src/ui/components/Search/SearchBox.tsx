@@ -75,8 +75,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
       ? exactPhraseResults?.items
       : fuzzyResults?.items;
 
-  console.log("SearchBox render with params:", activeResults);
-
   const fetchError =
     debouncedSearchParams.type === ESearchType.EXACT_PHRASE
       ? exactError

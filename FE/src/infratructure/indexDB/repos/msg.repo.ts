@@ -34,14 +34,14 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
       return db.messages.toArray();
     },
     async getByConversationId(
-      conversationId,
-      limit = 20,
-      direction = "older",
-      cursor
+      conversationId: string,
+      limit = 50,
+      direction: "older" | "newer" | "around" | "latest" = "latest",
+      cursor?: number | null
     ): Promise<TPaginationResult<IMsgEntity, TTimeStamp>> {
       let data: IMsgEntity[] = [];
 
-      if (!cursor) {
+      if (!cursor && direction === "latest") {
         const results = await db.messages
           .where("[conversationId+createdAt]")
           .between(
@@ -55,17 +55,21 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
         data = results.slice(0, limit);
 
         return {
-          data: [...data].reverse(),
-          nextCursor:
-            results.length > limit ? data[data.length - 1].createdAt : null,
-          prevCursor: null,
+          data: data.reverse(),
+          nextCursor: results.length > limit ? data[0].createdAt : null, // có thể load older
+          prevCursor: null, // không có newer vì đây là latest
         };
       }
 
-      if (direction === "older") {
+      if (direction === "older" && cursor) {
         const results = await db.messages
           .where("[conversationId+createdAt]")
-          .between([conversationId, Dexie.minKey], [conversationId, cursor])
+          .between(
+            [conversationId, Dexie.minKey],
+            [conversationId, cursor],
+            true,
+            false
+          )
           .reverse()
           .limit(limit + 1)
           .toArray();
@@ -73,17 +77,21 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
         data = results.slice(0, limit);
 
         return {
-          data: [...data].reverse(),
-          nextCursor:
-            results.length > limit ? data[data.length - 1].createdAt : null,
-          prevCursor: data.length > 0 ? data[0].createdAt : null,
+          data: data.reverse(),
+          nextCursor: results.length > limit ? data[0].createdAt : null, // tiếp tục older (tin nhắn cũ hơn)
+          prevCursor: data.length > 0 ? data[data.length - 1].createdAt : null, // có thể newer (tin nhắn mới hơn)
         };
       }
 
-      if (direction === "newer") {
+      if (direction === "newer" && cursor) {
         const results = await db.messages
           .where("[conversationId+createdAt]")
-          .between([conversationId, cursor], [conversationId, Dexie.maxKey])
+          .between(
+            [conversationId, cursor],
+            [conversationId, Dexie.maxKey],
+            false,
+            true
+          )
           .limit(limit + 1)
           .toArray();
 
@@ -91,37 +99,56 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
 
         return {
           data,
-          nextCursor:
-            results.length > limit ? data[data.length - 1].createdAt : null,
-          prevCursor: data.length > 0 ? data[0].createdAt : null,
+          nextCursor: data.length > 0 ? data[0].createdAt : null, // có thể older (tin nhắn cũ hơn)
+          prevCursor:
+            results.length > limit ? data[data.length - 1].createdAt : null, // tiếp tục newer (tin nhắn mới hơn)
         };
       }
 
-      // direction === "around"
-      const half = Math.floor(limit / 2);
+      if (direction === "around" && cursor) {
+        const half = Math.floor(limit / 2);
+        const older = await db.messages
+          .where("[conversationId+createdAt]")
+          .between(
+            [conversationId, Dexie.minKey],
+            [conversationId, cursor],
+            true,
+            true
+          )
+          .reverse()
+          .limit(half + 1)
+          .toArray();
 
-      const older = await db.messages
-        .where("[conversationId+createdAt]")
-        .between([conversationId, Dexie.minKey], [conversationId, cursor])
-        .reverse()
-        .limit(half + 1)
-        .toArray();
+        const newer = await db.messages
+          .where("[conversationId+createdAt]")
+          .between(
+            [conversationId, cursor],
+            [conversationId, Dexie.maxKey],
+            true,
+            true
+          )
+          .limit(half + 1)
+          .toArray();
 
-      const newer = await db.messages
-        .where("[conversationId+createdAt]")
-        .between([conversationId, cursor], [conversationId, Dexie.maxKey])
-        .limit(half + 1)
-        .toArray();
+        const olderData = older.slice(0, half).reverse();
+        const newerData = newer.slice(0, half);
 
-      const olderData = older.slice(0, half).reverse();
-      const newerData = newer.slice(0, half);
+        data = [...olderData, ...newerData];
 
-      data = [...olderData, ...newerData];
+        return {
+          data,
+          nextCursor: olderData.length > 0 ? olderData[0].createdAt : null, // có thể load older
+          prevCursor:
+            newerData.length > 0
+              ? newerData[newerData.length - 1].createdAt
+              : null, // có thể load newer
+        };
+      }
 
       return {
-        data,
-        nextCursor: data.length > 0 ? data[data.length - 1].createdAt : null,
-        prevCursor: data.length > 0 ? data[0].createdAt : null,
+        data: [],
+        nextCursor: null,
+        prevCursor: null,
       };
     },
   };

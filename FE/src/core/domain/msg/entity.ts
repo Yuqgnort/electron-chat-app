@@ -1,6 +1,6 @@
 import { TID, TTimeStamp } from "../type";
 
-export type TMsgDirection = "older" | "newer" | "around";
+export type TMsgDirection = "older" | "newer" | "around" | "latest";
 
 export enum EMsgStatus {
   SENT = "sent",

@@ -32,6 +32,7 @@ export function ConvList({ activeTab }: { activeTab: SidebarTab }) {
         otherParticipants.find((user) => user.id !== currentUser?.id) || null,
       highlightedMessageId: null,
       highlightedMessageText: null,
+      cursor: null,
     });
     setIsHaveNewMessage(false);
   };

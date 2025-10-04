@@ -34,7 +34,6 @@ export async function initDb(): Promise<ChatDb> {
     const isHaveUsers = await db.users.count();
     if (!isHaveUsers) {
       localStorage.clear();
-      window.location.reload();
     }
   }
   return db;

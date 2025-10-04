@@ -23,7 +23,7 @@ const mockCreate100Messages = async (
   convId: string,
   userIds: string[]
 ) => {
-  for (let i = 0; i < 200; i++) {
+  for (let i = 46; i < 100; i++) {
     try {
       await service.msg.sendMessage({
         content: `Message ${i + 1} from User ${userIds[0]} to User ${userIds[1]}`,
@@ -38,7 +38,6 @@ const mockCreate100Messages = async (
       await new Promise((resolve) => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`Failed to send message ${i + 1}:`, error);
-      // Continue with next message even if one fails
     }
   }
 };

@@ -19,6 +19,7 @@ import { SearchBox } from "../Search";
 import { ConvList } from "./ConvList";
 import { CurrentUser } from "./CurrentUser";
 import { UserList } from "./UserList";
+import { GET_MESSAGE_BY_CONV_ID_QUERY_KEY } from "@/ui/hooks/tanstack/msg";
 
 export enum SidebarTab {
   CONVERSATIONS = "conversations",
@@ -48,13 +49,19 @@ export function Sidebar() {
   const handleMessageClick = useCallback(
     async (result: ISearchRawResultItem, temp: string) => {
       if (!result.conversationId || !result.senderId) return;
+
       try {
         const receiverUser = await mutateAsync(result.senderId);
+
         setChatBoxState({
           receiverUser,
           conversationId: result.conversationId,
           highlightedMessageId: result.id,
           highlightedMessageText: temp,
+          cursor: result.createdAt,
+        });
+        queryClient.resetQueries({
+          queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY],
         });
         closeSearch();
       } catch (error) {

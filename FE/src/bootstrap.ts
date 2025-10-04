@@ -105,7 +105,7 @@ export async function bootstrap() {
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
   autoIndexMessageHandler(eventBus, searchRepo);
-  // indexExistingMessages(msgRepo, searchRepo);
+  indexExistingMessages(msgRepo, searchRepo);
 
   const service = createAppService(
     {

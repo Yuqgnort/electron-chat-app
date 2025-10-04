@@ -27,6 +27,7 @@ export function UserList() {
         conversationId: convs ? convs.id : null,
         highlightedMessageId: null,
         highlightedMessageText: null,
+        cursor: null,
       });
     } catch (error) {
       throw error;

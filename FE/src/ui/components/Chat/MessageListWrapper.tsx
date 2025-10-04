@@ -1,4 +1,4 @@
-import { IMsgEntity, TMsgDirection } from "@/core/domain/msg/entity";
+import { IMsgEntity } from "@/core/domain/msg/entity";
 import { useAppContext } from "@/ui/context";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
@@ -19,12 +19,11 @@ const updateMessageInCache = (
   payload: IMsgEntity,
   queryClient: QueryClient,
   conversationId?: string | null,
-  limit: number = 20,
-  direction: TMsgDirection = "older"
+  limit: number = 50
 ) => {
   if (!conversationId) return;
   queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
-    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, direction],
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit],
     (oldData) => {
       if (!oldData || !oldData.pages) return oldData;
       const rs = {
@@ -51,12 +50,11 @@ const addNewMessageToLastPageCache = (
   payload: IMsgEntity,
   queryClient: QueryClient,
   conversationId?: string | null,
-  limit: number = 20,
-  direction: TMsgDirection = "older"
+  limit: number = 50
 ) => {
   if (!conversationId) return;
   queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
-    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, direction],
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit],
     (oldData) => {
       if (!oldData || !oldData.pages || oldData.pages.length === 0) {
         return {
@@ -112,18 +110,12 @@ export function MessageListWrapper({
     isFetchingPreviousPage,
     hasPreviousPage,
     fetchPreviousPage,
-  } = useGetMessagesByConvId(service, chatBoxState.conversationId);
-
-  useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
-    updateMessageInCache(payload, queryClient, chatBoxState.conversationId);
-  });
-
-  useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
-    if (payload.conversationId !== chatBoxState.conversationId) return;
-    addNewMessageToLastPageCache(payload, queryClient, payload.conversationId);
-  });
-
-  if (!currentUser) return null;
+  } = useGetMessagesByConvId(
+    service,
+    chatBoxState.conversationId,
+    20,
+    chatBoxState?.cursor
+  );
 
   const handleLoadMoreTop = async () => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -137,17 +129,29 @@ export function MessageListWrapper({
     }
   };
 
-  const handleSearchMessage = async (messageId: number) => {
-    console.log("Searching for message:", messageId);
-    // TODO: Implement search logic to jump to specific message
-  };
-
   const firstMessageId = messages.length > 0 ? 1 : 0;
   const lastMessageId = messages.length;
   const allMessagesCount = messages.length;
 
+  useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
+    updateMessageInCache(payload, queryClient, chatBoxState.conversationId, 20);
+  });
+
+  useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
+    if (payload.conversationId !== chatBoxState.conversationId) return;
+    addNewMessageToLastPageCache(
+      payload,
+      queryClient,
+      payload.conversationId,
+      20
+    );
+  });
+
+  if (!currentUser) return null;
+
   return (
     <MessageList
+      direction={chatBoxState.cursor ? "around" : "latest"}
       messages={messages}
       allMessagesCount={allMessagesCount}
       firstMessageId={firstMessageId}
@@ -157,11 +161,10 @@ export function MessageListWrapper({
       highlightedMessageId={chatBoxState?.highlightedMessageId}
       highlightedMessageText={chatBoxState?.highlightedMessageText}
       currentUserId={currentUser.id}
-      isCanLoadMoreBottom={hasPreviousPage}
-      isCanLoadMoreTop={hasNextPage}
+      isCanLoadMoreBottom={hasNextPage}
+      isCanLoadMoreTop={hasPreviousPage}
       onLoadMoreTop={handleLoadMoreTop}
       onLoadMoreBottom={handleLoadMoreBottom}
-      onSearchMessage={handleSearchMessage}
     />
   );
 }

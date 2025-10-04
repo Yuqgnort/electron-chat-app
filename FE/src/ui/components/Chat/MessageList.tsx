@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Loader2, Search } from "lucide-react";
 import { IMsgEntity } from "@/core/domain/msg/entity";
+import { Loader2 } from "lucide-react";
+import React, { useEffect, useRef } from "react";
 import { MessageItem } from "./MessageItem";
-import { set } from "date-fns";
 
 type TMessageList2Props = {
+  direction?: "around" | "latest";
   messages: IMsgEntity[];
   allMessagesCount: number;
   firstMessageId: number;
@@ -18,14 +18,11 @@ type TMessageList2Props = {
   isCanLoadMoreBottom?: boolean;
   onLoadMoreTop?: () => Promise<void>;
   onLoadMoreBottom?: () => Promise<void>;
-  onSearchMessage?: (messageId: number) => Promise<void>;
 };
 
 const MessageList = ({
   messages,
-  allMessagesCount,
   firstMessageId,
-  lastMessageId,
   isLoadingTop = false,
   isLoadingBottom = false,
   highlightedMessageId,
@@ -33,9 +30,9 @@ const MessageList = ({
   currentUserId,
   isCanLoadMoreTop,
   isCanLoadMoreBottom,
+  direction = "latest",
   onLoadMoreTop,
   onLoadMoreBottom,
-  onSearchMessage,
 }: TMessageList2Props) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollTop = useRef(0);
@@ -43,12 +40,12 @@ const MessageList = ({
   const previousScrollHeight = useRef(0);
   const shouldMaintainScroll = useRef(false);
 
-  // Scroll to bottom on initial load
   useEffect(() => {
     if (
       isInitialLoad.current &&
       messages.length > 0 &&
-      chatContainerRef.current
+      chatContainerRef.current &&
+      direction === "latest"
     ) {
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
@@ -60,7 +57,6 @@ const MessageList = ({
     };
   }, [messages]);
 
-  // Maintain scroll position when loading more messages at top
   useEffect(() => {
     if (shouldMaintainScroll.current && chatContainerRef.current) {
       const currentScrollHeight = chatContainerRef.current.scrollHeight;
@@ -75,25 +71,24 @@ const MessageList = ({
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (highlightedMessageId) {
-      setTimeout(() => {
-        const targetElement = document.getElementById(
-          `msg-${highlightedMessageId}`
-        );
-        if (targetElement) {
-          targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 100);
-    }
-  }, [highlightedMessageId]);
+  // useEffect(() => {
+  //   if (highlightedMessageId) {
+  //     setTimeout(() => {
+  //       const targetElement = document.getElementById(
+  //         `msg-${highlightedMessageId}`
+  //       );
+  //       if (targetElement) {
+  //         targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+  //       }
+  //     }, 100);
+  //   }
+  // }, [highlightedMessageId]);
 
   const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
     const scrollTop = container.scrollTop;
     const scrollHeight = container.scrollHeight;
     const clientHeight = container.clientHeight;
-
     // Load more at top
     if (
       scrollTop < 100 &&
@@ -104,27 +99,19 @@ const MessageList = ({
     ) {
       shouldMaintainScroll.current = true;
       previousScrollHeight.current = scrollHeight;
-
-      console.log("Loading more messages at top...");
-
       await onLoadMoreTop();
     }
-
-    // Load more at bottom
     if (
       scrollHeight - scrollTop - clientHeight < 100 &&
       scrollTop > lastScrollTop.current &&
       onLoadMoreBottom &&
       !isLoadingBottom &&
-      lastMessageId < allMessagesCount
+      isCanLoadMoreBottom
     ) {
       await onLoadMoreBottom();
     }
-
     lastScrollTop.current = scrollTop;
   };
-
-  const handleSearch = () => {};
 
   return (
     <div className="flex flex-col h-full bg-gray-100">
@@ -138,7 +125,7 @@ const MessageList = ({
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
           </div>
         )}
-        {isCanLoadMoreBottom && (
+        {!isCanLoadMoreBottom && (
           <div className="text-center text-gray-500 text-sm py-2">
             📌 The oldest message
           </div>
@@ -147,7 +134,7 @@ const MessageList = ({
           const isCurrentUser = message.senderId === currentUserId;
           return (
             <div
-              key={message.localId || message.id}
+              key={message.id + message.localId}
               id={`msg-${message.id || message.localId}`}
               className="mb-3"
             >
@@ -165,7 +152,7 @@ const MessageList = ({
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
           </div>
         )}
-        {isCanLoadMoreTop && (
+        {!isCanLoadMoreTop && (
           <div className="text-center text-gray-500 text-sm py-2">
             📌 Latest Message
           </div>

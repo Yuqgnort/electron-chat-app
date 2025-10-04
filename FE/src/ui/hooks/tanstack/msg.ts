@@ -15,28 +15,43 @@ export const GET_MESSAGE_BY_CONV_ID_QUERY_KEY = "GET_MESSAGE_BY_CONV_ID";
 export const useGetMessagesByConvId = (
   service: TBootstrapReturn["service"],
   convId: string | null,
-  limit: number = 20,
-  direction: TMsgDirection = "older"
+  limit: number = 50,
+  initialCursor: number | null = null,
+  enabled: boolean = true
 ) => {
   return useInfiniteQuery({
-    queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, convId, limit, direction],
-    queryFn: async ({ pageParam }) =>
-      await service.msg.getMsgsByConvId(
+    queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, convId, limit],
+    queryFn: async ({ pageParam }) => {
+      const rs = await service.msg.getMsgsByConvId(
         convId!,
         limit,
-        direction,
-        pageParam || null
-      ),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => lastPage?.nextCursor ?? null,
-    enabled: !!convId,
+        pageParam.direction,
+        pageParam.cursor
+      );
+
+      return rs;
+    },
+    initialPageParam: {
+      cursor: initialCursor,
+      direction: initialCursor ? "around" : ("latest" as TMsgDirection),
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage?.nextCursor
+        ? { cursor: lastPage.nextCursor, direction: "older" as TMsgDirection }
+        : null;
+    },
+    getPreviousPageParam: (firstPage) => {
+      return firstPage?.prevCursor
+        ? { cursor: firstPage.prevCursor, direction: "newer" as TMsgDirection }
+        : null;
+    },
+    enabled: !!convId && enabled,
     select: (data) => {
-      const rs = mergeKSortedArrays<IMsgEntity>({
+      console.log("All pages data:", data);
+      return mergeKSortedArrays<IMsgEntity>({
         arrays: data?.pages.map((page) => page?.data ?? []) || [],
         compareFn: (a, b) => a.createdAt - b.createdAt,
       });
-
-      return rs;
     },
   });
 };

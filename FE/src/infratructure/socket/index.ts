@@ -12,6 +12,9 @@ export interface ISocketClient extends ICommunicationManager {
   register(userId: string): void;
   isConnected(): boolean;
   connectAndRegister(userId: string): void;
+  // Simple typing methods
+  startTypingTo(receiverUserId: string): void;
+  stopTypingTo(receiverUserId: string): void;
 }
 
 type TExtractPayload<T, U extends Event["type"]> = T extends {
@@ -39,6 +42,8 @@ export function createSocketClient(
 ): ISocketClient {
   let socket: Socket<TReceivedEventSocketMap, TSentEventSocketMap> | null =
     null;
+  let currentUserId: string | null = null;
+
   return {
     connect() {
       socket = io(url, {
@@ -96,6 +101,7 @@ export function createSocketClient(
       }
       const registerUser = () => {
         if (socket && socket.connected) {
+          currentUserId = userId;
           socket.emit("register", { userId });
         }
       };
@@ -111,6 +117,7 @@ export function createSocketClient(
       if (!socket || !socket.connected) {
         throw new Error("Socket not connected");
       }
+      currentUserId = userId;
       socket.emit("register", { userId });
     },
 
@@ -171,6 +178,32 @@ export function createSocketClient(
         throw new Error("Socket not connected");
       }
       socket.emit("typing:stop", { userId, conversationId });
+    },
+
+    // Simple typing methods
+    startTypingTo(receiverUserId: string): void {
+      if (!socket || !socket.connected) {
+        console.warn("Cannot start typing: Socket not connected");
+        return;
+      }
+      console.log("🔥 Emitting typing start to:", receiverUserId);
+      // Sử dụng event có sẵn với receiverUserId làm conversationId
+      socket.emit("typing:start", {
+        userId: currentUserId || "",
+        conversationId: receiverUserId,
+      });
+    },
+
+    stopTypingTo(receiverUserId: string): void {
+      if (!socket || !socket.connected) {
+        console.warn("Cannot stop typing: Socket not connected");
+        return;
+      }
+
+      socket.emit("typing:stop", {
+        userId: currentUserId || "",
+        conversationId: receiverUserId,
+      });
     },
   };
 }

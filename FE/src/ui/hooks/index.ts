@@ -18,3 +18,12 @@ export {
   type IUserStatus,
   type IUseUserStatusReturn,
 } from "./useUserStatus";
+export {
+  useSimpleTyping,
+  type IUseSimpleTypingParams,
+  type IUseSimpleTypingReturn,
+} from "./useSimpleTyping";
+export {
+  useSimpleTypingListener,
+  type IUseSimpleTypingListenerReturn,
+} from "./useSimpleTypingListener";

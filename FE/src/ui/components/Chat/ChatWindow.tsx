@@ -3,6 +3,7 @@ import { MessageCircleDashed } from "lucide-react";
 import { ChatHeader } from "./ChatHeader";
 import { MessageInput } from "./MessageInput";
 import { MessageListWrapper } from "./MessageListWrapper";
+import { SimpleTypingIndicator } from "./SimpleTypingIndicator";
 
 interface ChatWindowProps {
   receiverUser?: IUserEntity | null;
@@ -30,7 +31,7 @@ export function ChatWindow({ receiverUser, onSendMessage }: ChatWindowProps) {
     <div className="flex-1 flex flex-col h-full bg-white">
       <ChatHeader receiverUser={receiverUser} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <MessageListWrapper receiverUserId={receiverUser.id} />
+        <MessageListWrapper />
       </div>
       <MessageInput
         onSendMessage={onSendMessage}

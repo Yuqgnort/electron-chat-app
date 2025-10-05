@@ -115,6 +115,8 @@ export function MessageListWrapper() {
     chatBoxState?.cursor
   );
 
+  console.log("MessageListWrapper render", { messages });
+
   const handleLoadMoreTop = async () => {
     if (hasNextPage && !isFetchingNextPage) {
       await fetchNextPage();

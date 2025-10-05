@@ -147,21 +147,27 @@ function handleDisconnect(socket: AuthSocket, io: Server) {
 function handleTypingStart(socket: AuthSocket, io: Server) {
   return ({
     userId,
-    conversationId,
+    conversationId, // Đây giờ là receiverId
   }: EventPayloads[ChatEvent.TYPING_START]) => {
     if (!socket.userId || socket.userId !== userId) {
       console.error("Unauthorized typing start request");
       return;
     }
 
-    addTypingUser(conversationId, userId, socket.id);
+    const receiverId = conversationId;
 
-    // Notify other participants in the conversation
-    socket.to(conversationId).emit(ChatEvent.TYPING_INDICATOR, {
-      userId,
-      conversationId,
-      isTyping: true,
-    });
+    if (isUserOnline(receiverId)) {
+      const receiverSocketIds = getUserSocketIds(receiverId);
+      receiverSocketIds.forEach((socketId) => {
+        io.to(socketId).emit(ChatEvent.TYPING_INDICATOR, {
+          userId,
+          conversationId: receiverId,
+          isTyping: true,
+        });
+      });
+    } else {
+      console.log("⚠️ Receiver offline:", receiverId);
+    }
   };
 }
 
@@ -172,14 +178,26 @@ function handleTypingStop(socket: AuthSocket, io: Server) {
       return;
     }
 
-    removeTypingUser(conversationId, userId);
-
-    // Notify other participants in the conversation
-    socket.to(conversationId).emit(ChatEvent.TYPING_INDICATOR, {
-      userId,
-      conversationId,
-      isTyping: false,
+    const receiverId = conversationId; // Sử dụng conversationId như receiverId
+    console.log("🔥 Backend - User typing stop:", {
+      from: userId,
+      to: receiverId,
     });
+
+    // Gửi trực tiếp đến receiver (không dùng room)
+    if (isUserOnline(receiverId)) {
+      const receiverSocketIds = getUserSocketIds(receiverId);
+      receiverSocketIds.forEach((socketId) => {
+        io.to(socketId).emit(ChatEvent.TYPING_INDICATOR, {
+          userId,
+          conversationId: receiverId,
+          isTyping: false,
+        });
+      });
+      console.log("✅ Sent typing stop to:", receiverId);
+    } else {
+      console.log("⚠️ Receiver offline:", receiverId);
+    }
   };
 }
 

@@ -32,14 +32,41 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
   const buildUserFilterClause = (query: ISearchQuery): string => {
     let clause = "";
 
-    // Filter by current user
-    // if (query.currentUserId) {
-    //   clause += ` AND senderId != '${sanitizeString(query.currentUserId)}'`;
-    // }
-
-    // Filter by specific user
     if (query.userId) {
       clause += ` AND senderId = '${sanitizeString(query.userId)}'`;
+    }
+
+    return clause;
+  };
+
+  const buildDateFilterClause = (query: ISearchQuery): string => {
+    let clause = "";
+
+    // Filter by date range
+    if (query.startDate && query.endDate) {
+      // Convert dates to timestamps for comparison
+      const startTimestamp = new Date(query.startDate).getTime();
+      const endTimestamp =
+        new Date(query.endDate).getTime() + (24 * 60 * 60 * 1000 - 1); // End of day
+
+      console.log("Date filtering:", {
+        startDate: query.startDate,
+        endDate: query.endDate,
+        startTimestamp,
+        endTimestamp,
+        startDateObj: new Date(query.startDate),
+        endDateObj: new Date(query.endDate),
+      });
+
+      // Cast createdAt to numeric for comparison since it might be stored as string
+      clause += ` AND CAST(createdAt AS INTEGER) >= ${startTimestamp} AND CAST(createdAt AS INTEGER) <= ${endTimestamp}`;
+    } else if (query.startDate) {
+      const startTimestamp = new Date(query.startDate).getTime();
+      clause += ` AND CAST(createdAt AS INTEGER) >= ${startTimestamp}`;
+    } else if (query.endDate) {
+      const endTimestamp =
+        new Date(query.endDate).getTime() + (24 * 60 * 60 * 1000 - 1); // End of day
+      clause += ` AND CAST(createdAt AS INTEGER) <= ${endTimestamp}`;
     }
 
     return clause;
@@ -77,6 +104,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
 
     sql += buildUserFilterClause(query);
+    sql += buildDateFilterClause(query);
     sql += ` ORDER BY createdAt DESC LIMIT ${query.limit || 50}`;
 
     console.log("Final SQL for full-text search:", sql);
@@ -101,6 +129,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
 
     sql += buildUserFilterClause(query);
+    sql += buildDateFilterClause(query);
     sql += ` ORDER BY createdAt DESC LIMIT ${query.limit || 50}`;
 
     console.log("Final SQL for exact phrase search:", sql);

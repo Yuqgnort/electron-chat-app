@@ -41,8 +41,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     startDate: undefined,
   });
 
-  console.log("SearchBox render", searchParams);
-
   const { data: users = [] } = useGetUsers(service);
 
   const debouncedSearchParams = useDebounce(searchParams, 300);
@@ -81,18 +79,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
     onMessageClick?.(result, tempt);
     onClose();
-  };
-
-  const handleSelectUser = async (userId?: string) => {
-    try {
-      if (!currentUser) return;
-      setSearchParams((prev) => ({
-        ...prev,
-        userId: userId ? userId : undefined,
-      }));
-    } catch (error) {
-      console.error("Error selecting user:", error);
-    }
   };
 
   const formatDate = (date: string | number) => {

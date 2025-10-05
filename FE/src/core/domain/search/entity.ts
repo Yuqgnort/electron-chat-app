@@ -23,6 +23,7 @@ export interface ISearchQuery {
   userId?: TID;
   conversationId?: TID;
   limit: number;
+  offset?: number;
   createdAt?: TTimeStamp;
   type: ESearchType;
   startDate?: string;
@@ -39,6 +40,7 @@ export interface ISearchRawResultItem extends IMsgEntity {
 export type ISearchRawResult = {
   items: ISearchRawResultItem[];
   totalFound: number;
+  hasMore: boolean;
   executionTime?: number;
   query: string;
   searchType: ESearchType;
@@ -59,6 +61,7 @@ export interface ISearchIndexResult {
   items: ISearchIndexItem[];
   query: string;
   totalFound: number;
+  hasMore: boolean;
   searchType: ESearchType;
   executionTime?: number;
 }
@@ -121,12 +124,14 @@ export const createSearchRawResult = (
   items: ISearchRawResultItem[],
   query: string,
   searchType: ESearchType,
+  hasMore: boolean = false,
   executionTime?: number
 ): ISearchRawResult => {
   return {
     items,
     query,
     totalFound: items.length,
+    hasMore,
     searchType,
     executionTime,
   };
@@ -136,12 +141,14 @@ export const createSearchIndexResult = (
   items: ISearchIndexItem[],
   query: string,
   searchType: ESearchType,
+  hasMore: boolean = false,
   executionTime?: number
 ): ISearchIndexResult => {
   return {
     items,
     query,
     totalFound: items.length,
+    hasMore,
     searchType,
     executionTime,
   };

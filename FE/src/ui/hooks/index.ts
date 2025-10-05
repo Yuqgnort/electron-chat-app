@@ -8,6 +8,12 @@ export {
   useSearchMessagesQuery,
   type TParams,
 } from "./useSearchMessages";
+export {
+  useInfiniteSearchQuery,
+  useInfiniteSearchExactPhraseQuery,
+  type TInfiniteSearchParams,
+} from "./useInfiniteSearchMessages";
+export { useInfiniteScroll, useInfiniteScrollRef } from "./useInfiniteScroll";
 export { useStickToBottomOnLoad } from "./useStickToBottomOnLoad";
 export {
   useSubscribeEventBus,

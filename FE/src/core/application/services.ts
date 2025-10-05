@@ -259,6 +259,7 @@ export const prefixSearchAndGetRawData = async (
       enrichedItems,
       query.query,
       query.type,
+      indexResults.hasMore,
       Date.now() - startTime
     );
   } catch (error) {
@@ -267,6 +268,7 @@ export const prefixSearchAndGetRawData = async (
       [],
       query.query,
       query.type,
+      false,
       Date.now() - startTime
     );
   }
@@ -293,6 +295,7 @@ export const exactPhraseSearchAndGetRawData = async (
       enrichedItems,
       query.query,
       query.type,
+      indexResults.hasMore,
       Date.now() - startTime
     );
   } catch (error) {
@@ -301,6 +304,7 @@ export const exactPhraseSearchAndGetRawData = async (
       [],
       query.query,
       query.type,
+      false,
       Date.now() - startTime
     );
   }

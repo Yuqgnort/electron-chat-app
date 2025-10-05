@@ -7,16 +7,16 @@ import { useAppContext } from "@/ui/context";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetUsers } from "@/ui/hooks/tanstack/user";
 import { useDebounce } from "@/ui/hooks/useDebounce";
+import { useInfiniteScroll } from "@/ui/hooks/useInfiniteScroll";
 import {
-  useSearchExactPhraseQuery,
-  useSearchMessagesQuery,
-} from "@/ui/hooks/useSearchMessages";
+  useInfiniteSearchExactPhraseQuery,
+  useInfiniteSearchQuery,
+} from "@/ui/hooks/useInfiniteSearchMessages";
 import { formatDistanceToNow } from "date-fns";
-import { Filter, MessageSquare, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Filter, Loader, MessageSquare, Search, X } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../core/Button";
 import { Input } from "../core/Input";
-import { ScrollArea } from "../core/ScrollArea";
 import FilterPanel from "./FilterPanel";
 import Snippet from "./Snippet";
 
@@ -25,6 +25,67 @@ interface SearchBoxProps {
   onClose: () => void;
   onMessageClick?: (result: ISearchRawResultItem, temp: string) => void;
 }
+
+type SearchItemProps = {
+  msg: ISearchRawResultItem;
+  handleClickMessage: (result: ISearchRawResultItem, temp: string) => void;
+  searchParams: ISearchQuery;
+  currentUser: { id: string };
+};
+
+const formatDate = (date: string | number) => {
+  const timestamp = Number(date);
+  const parsed = Number.isFinite(timestamp)
+    ? new Date(timestamp)
+    : new Date(date);
+  return formatDistanceToNow(parsed, { addSuffix: true });
+};
+
+const SearchItem = memo(function SearchItem({
+  msg,
+  handleClickMessage,
+  searchParams,
+  currentUser,
+}: SearchItemProps) {
+  return (
+    <div
+      key={`${msg.id}-${msg.conversationId}`}
+      onClick={() => handleClickMessage(msg, searchParams.query)}
+      className="p-4 hover:bg-blue-100 cursor-pointer transition-colors"
+    >
+      <div className="flex items-start space-x-3">
+        <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-medium">
+            {(msg.senderId === currentUser.id
+              ? msg.receiverName
+              : msg.senderName
+            )
+              .charAt(0)
+              .toUpperCase()}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-normal text-gray-500 text-sm">
+              {msg.senderId === currentUser.id
+                ? msg.receiverName
+                : msg.senderName}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {formatDate(msg.createdAt)}
+            </span>
+          </div>
+          <div className="flex items-start gap-1 line-clamp-1 w-full">
+            {msg.senderId === currentUser.id && (
+              <p className="font-medium text-sm">You:</p>
+            )}
+            <Snippet text={msg.content} keywords={[searchParams.query]} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const [isFilterVisible, setIsFilterVisible] = useState(false);
@@ -45,48 +106,88 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
 
   const debouncedSearchParams = useDebounce(searchParams, 300);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll maintenance refs
+  const lastScrollTop = useRef(0);
+  const previousScrollHeight = useRef(0);
+  const shouldMaintainScroll = useRef(false);
 
   const {
     data: fuzzyResults,
     isFetching: isFetchingFuzzy,
+    isFetchingNextPage: isFetchingNextPageFuzzy,
+    hasNextPage: hasNextPageFuzzy,
+    fetchNextPage: fetchNextPageFuzzy,
     error: fuzzyError,
-  } = useSearchMessagesQuery({
+  } = useInfiniteSearchQuery({
     query: debouncedSearchParams,
   });
 
   const {
     data: exactPhraseResults,
     isFetching: isFetchingExact,
+    isFetchingNextPage: isFetchingNextPageExact,
+    hasNextPage: hasNextPageExact,
+    fetchNextPage: fetchNextPageExact,
     error: exactError,
-  } = useSearchExactPhraseQuery({
+  } = useInfiniteSearchExactPhraseQuery({
     query: debouncedSearchParams,
   });
 
-  const activeResults =
-    debouncedSearchParams.type === ESearchType.EXACT_PHRASE
-      ? exactPhraseResults?.items
-      : fuzzyResults?.items;
+  const isExactPhrase = debouncedSearchParams.type === ESearchType.EXACT_PHRASE;
 
-  const fetchError =
-    debouncedSearchParams.type === ESearchType.EXACT_PHRASE
-      ? exactError
-      : fuzzyError;
+  const activeResults = useMemo(() => {
+    const data = isExactPhrase ? exactPhraseResults : fuzzyResults;
+    return data?.pages.flatMap((page) => page.items) || [];
+  }, [isExactPhrase, exactPhraseResults, fuzzyResults]);
+
+  const fetchError = isExactPhrase ? exactError : fuzzyError;
   const isFetching = isFetchingFuzzy || isFetchingExact;
+  const isFetchingNextPage = isFetchingNextPageFuzzy || isFetchingNextPageExact;
+  const hasNextPage = isExactPhrase ? hasNextPageExact : hasNextPageFuzzy;
+  const fetchNextPage = isExactPhrase ? fetchNextPageExact : fetchNextPageFuzzy;
+
   const hasResults = activeResults && activeResults.length > 0;
   const isEmpty =
     !hasResults && !isFetching && !!debouncedSearchParams.query.trim();
 
+  const { attachScrollListener } = useInfiniteScroll({
+    hasNextPage: !!hasNextPage,
+    fetchNextPage: () => {
+      if (scrollRef.current) {
+        shouldMaintainScroll.current = true;
+        previousScrollHeight.current = scrollRef.current.scrollHeight;
+        lastScrollTop.current = scrollRef.current.scrollTop;
+      }
+      return fetchNextPage();
+    },
+    isFetchingNextPage,
+    threshold: 200,
+  });
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const cleanup = attachScrollListener(scrollRef.current);
+      return cleanup;
+    }
+  }, [attachScrollListener]);
+
+  useEffect(() => {
+    if (shouldMaintainScroll.current && scrollRef.current) {
+      const currentScrollHeight = scrollRef.current.scrollHeight;
+      const scrollDiff = currentScrollHeight - previousScrollHeight.current;
+      if (scrollDiff > 0) {
+        scrollRef.current.scrollTop = lastScrollTop.current + scrollDiff;
+      }
+      shouldMaintainScroll.current = false;
+      previousScrollHeight.current = 0;
+    }
+  }, [activeResults]);
+
   const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
     onMessageClick?.(result, tempt);
     onClose();
-  };
-
-  const formatDate = (date: string | number) => {
-    const timestamp = Number(date);
-    const parsed = Number.isFinite(timestamp)
-      ? new Date(timestamp)
-      : new Date(date);
-    return formatDistanceToNow(parsed, { addSuffix: true });
   };
 
   useEffect(() => {
@@ -149,7 +250,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
             <p>Type to search through your message history</p>
           </div>
         )}
-
         {!isFetching && isEmpty && (
           <div className="p-8 text-center text-muted-foreground">
             <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-40" />
@@ -157,64 +257,64 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
             <p>Try different keywords or check your spelling</p>
           </div>
         )}
-
         {!isFetching && hasResults && (
-          <ScrollArea className="h-full">
+          <div className="h-full overflow-hidden">
             <div className="px-4 py-2 text-sm font-medium border-b">
               {fetchError ? (
                 <span className="text-destructive">
                   Error: {String(fetchError)}
                 </span>
               ) : (
-                `Found ${activeResults.length} message${
-                  activeResults.length !== 1 ? "s" : ""
-                }`
+                <div className="flex items-center justify-between">
+                  <span>
+                    Found {activeResults.length} message
+                    {activeResults.length !== 1 ? "s" : ""}
+                  </span>
+                  {hasNextPage && (
+                    <span className="text-xs text-muted-foreground">
+                      Scroll for more results
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-            <div className="divide-y">
-              {activeResults.map((msg) => (
-                <div
-                  key={`${msg.id}-${msg.conversationId}`}
-                  onClick={() => handleClickMessage(msg, searchParams.query)}
-                  className="p-4 hover:bg-blue-100 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-start space-x-3">
-                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-medium">
-                        {(msg.senderId === currentUser.id
-                          ? msg.receiverName
-                          : msg.senderName
-                        )
-                          .charAt(0)
-                          .toUpperCase()}
+            <div
+              ref={scrollRef}
+              className="h-full overflow-y-auto"
+              style={{ maxHeight: "calc(100% - 60px)" }}
+            >
+              <div className="divide-y">
+                {activeResults.map((msg: ISearchRawResultItem) => (
+                  <SearchItem
+                    key={`${msg.id}-${msg.conversationId}`}
+                    msg={msg}
+                    handleClickMessage={handleClickMessage}
+                    searchParams={searchParams}
+                    currentUser={currentUser}
+                  />
+                ))}
+
+                {isFetchingNextPage && (
+                  <div className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader className="w-4 h-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">
+                        Loading more results...
                       </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-normal text-gray-500 text-sm">
-                          {msg.senderId === currentUser.id
-                            ? msg.receiverName
-                            : msg.senderName}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(msg.createdAt)}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-1 line-clamp-1 w-full">
-                        {msg.senderId === currentUser.id && (
-                          <p className="font-medium text-sm">You:</p>
-                        )}
-                        <Snippet
-                          text={msg.content}
-                          keywords={[searchParams.query]}
-                        />
-                      </div>
-                    </div>
                   </div>
-                </div>
-              ))}
+                )}
+
+                {!hasNextPage && activeResults.length > 0 && (
+                  <div className="p-4 text-center">
+                    <span className="text-xs text-muted-foreground">
+                      No more results
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-          </ScrollArea>
+          </div>
         )}
       </div>
     </div>

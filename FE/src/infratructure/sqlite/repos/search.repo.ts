@@ -84,11 +84,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
   const performFullTextSearch = async (
     query: ISearchQuery,
     ranking: TRankingColection
-  ): Promise<ISearchIndexItem[]> => {
+  ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
     console.log(
       "Performing full-text search with query:",
       buildPhraseSearch(sanitizeString(query.query))
     );
+
+    const limit = query.limit || 50;
 
     let sql = `
       SELECT messageId, content, senderId, conversationId, createdAt, 
@@ -105,18 +107,32 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     sql += buildUserFilterClause(query);
     sql += buildDateFilterClause(query);
-    sql += ` ORDER BY createdAt DESC LIMIT ${query.limit || 50}`;
+    sql += ` ORDER BY createdAt DESC LIMIT ${limit + 1}`; // Fetch one extra to check hasMore
+
+    if (query.offset && query.offset > 0) {
+      sql += ` OFFSET ${query.offset}`;
+    }
 
     console.log("Final SQL for full-text search:", sql);
 
     const rawResults = await db.select(sql);
-    return mapSQLiteRows(rawResults as any[], mapToSearchIndexItem);
+    const mappedResults = mapSQLiteRows(
+      rawResults as any[],
+      mapToSearchIndexItem
+    );
+
+    const hasMore = mappedResults.length > limit;
+    const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
+
+    return { items, hasMore };
   };
 
   const performExactPhraseSearch = async (
     query: ISearchQuery,
     ranking: TRankingColection
-  ): Promise<ISearchIndexItem[]> => {
+  ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
+    const limit = query.limit || 50;
+
     let sql = `
       SELECT messageId, content, senderId, conversationId, createdAt, receiverId,
              1.0 as rank, '' as highlight
@@ -130,12 +146,24 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     sql += buildUserFilterClause(query);
     sql += buildDateFilterClause(query);
-    sql += ` ORDER BY createdAt DESC LIMIT ${query.limit || 50}`;
+    sql += ` ORDER BY createdAt DESC LIMIT ${limit + 1}`; // Fetch one extra to check hasMore
+
+    if (query.offset && query.offset > 0) {
+      sql += ` OFFSET ${query.offset}`;
+    }
 
     console.log("Final SQL for exact phrase search:", sql);
     const rawResults = await db.select(sql);
     console.log("Raw results:", rawResults);
-    return mapSQLiteRows(rawResults as any[], mapToSearchIndexItem);
+    const mappedResults = mapSQLiteRows(
+      rawResults as any[],
+      mapToSearchIndexItem
+    );
+
+    const hasMore = mappedResults.length > limit;
+    const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
+
+    return { items, hasMore };
   };
 
   return {
@@ -152,24 +180,25 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       try {
         validateRequiredFields(query, ["query", "type", "currentUserId"]);
 
-        let results: ISearchIndexItem[] = [];
+        let searchResult: { items: ISearchIndexItem[]; hasMore: boolean };
 
         switch (query.type) {
           case ESearchType.FULL_TEXT:
-            results = await performFullTextSearch(query, ranking);
+            searchResult = await performFullTextSearch(query, ranking);
             break;
           case ESearchType.EXACT_PHRASE:
-            results = await performExactPhraseSearch(query, ranking);
+            searchResult = await performExactPhraseSearch(query, ranking);
             break;
           default:
-            results = await performFullTextSearch(query, ranking);
+            searchResult = await performFullTextSearch(query, ranking);
         }
 
         const executionTime = Date.now() - startTime;
         return createSearchIndexResult(
-          results,
+          searchResult.items,
           query.query,
           query.type,
+          searchResult.hasMore,
           executionTime
         );
       } catch (error) {
@@ -178,6 +207,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
           [],
           query.query,
           query.type,
+          false,
           Date.now() - startTime
         );
       }
@@ -196,9 +226,10 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         const executionTime = Date.now() - startTime;
 
         return createSearchIndexResult(
-          results,
+          results.items,
           query.query,
           ESearchType.EXACT_PHRASE,
+          results.hasMore,
           executionTime
         );
       } catch (error) {
@@ -207,6 +238,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
           [],
           query.query,
           ESearchType.EXACT_PHRASE,
+          false,
           Date.now() - startTime
         );
       }

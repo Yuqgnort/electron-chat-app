@@ -12,6 +12,7 @@ import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import MessageList from "./MessageList";
 import { Button } from "../core/Button";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { useMemo } from "react";
 
 const updateMessageInCache = (
   payload: IMsgEntity,
@@ -114,8 +115,6 @@ export function MessageListWrapper() {
     20,
     chatBoxState?.cursor
   );
-
-  console.log("MessageListWrapper render", { messages });
 
   const handleLoadMoreTop = async () => {
     if (hasNextPage && !isFetchingNextPage) {

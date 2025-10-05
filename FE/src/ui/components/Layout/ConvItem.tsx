@@ -1,10 +1,12 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IConvEntity } from "@/core/domain/conv/entity";
 import { IUserEntity } from "@/core/domain/user/entity";
 import { IMsgEntity } from "@/core/domain/msg/entity";
 import { getStatusIcon } from "@/ui/helper";
 import { cn } from "@/ui/lib/utils";
+import { useAppContext } from "@/ui/context";
+import { useUserStatus } from "@/ui/hooks";
 
 interface ConvItemProps {
   conversation: IConvEntity;
@@ -27,6 +29,25 @@ export const ConvItem = memo(function ConvItem({
   onClick,
 }: ConvItemProps) {
   const otherUser = otherParticipants[0];
+  const { eventBus, socket } = useAppContext();
+  const { isUserOnline, getUserStatus, ensureUserStatus, hasInitialData } =
+    useUserStatus(socket, eventBus);
+
+  const isOnline = isUserOnline(otherUser?.id || "");
+  const userStatus = getUserStatus(otherUser?.id || "");
+
+  const getStatusIndicatorClass = () => {
+    if (!hasInitialData && !userStatus) {
+      return "bg-gray-300";
+    }
+    return isOnline ? "bg-green-500" : "bg-gray-400";
+  };
+
+  useEffect(() => {
+    if (otherUser?.id) {
+      ensureUserStatus(otherUser.id);
+    }
+  }, [otherUser?.id, ensureUserStatus]);
 
   if (!otherUser) return null;
 
@@ -49,11 +70,22 @@ export const ConvItem = memo(function ConvItem({
               {otherUser.displayName.charAt(0).toUpperCase()}
             </span>
           </div>
+
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"
+            className={cn(
+              "absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white rounded-full",
+              getStatusIndicatorClass()
+            )}
+            title={
+              !hasInitialData && !userStatus
+                ? "Đang tải trạng thái..."
+                : isOnline
+                  ? "Đang online"
+                  : "Offline"
+            }
           />
         </div>
         <div className="flex-1 min-w-0">

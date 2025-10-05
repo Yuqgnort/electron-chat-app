@@ -6,12 +6,12 @@ import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetConvWithParticipantsByUserId } from "@/ui/hooks/tanstack/conv";
 import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
 import { MessagesSquare } from "lucide-react";
+import { useState } from "react";
 import { ConvItem } from "./ConvItem";
-import { useEffect, useState } from "react";
 import { SidebarTab } from "./Sidebar";
 
 export function ConvList({ activeTab }: { activeTab: SidebarTab }) {
-  const { service, eventBus } = useAppContext();
+  const { service, eventBus, socket } = useAppContext();
   const { currentUser } = useCurrentUserStore();
   const { setChatBoxState, chatBoxState } = useChatWindowStore();
   const [isHaveNewMessage, setIsHaveNewMessage] = useState(false);

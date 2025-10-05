@@ -7,7 +7,6 @@ import { useAppContext } from "@/ui/context";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetUsers } from "@/ui/hooks/tanstack/user";
 import { useDebounce } from "@/ui/hooks/useDebounce";
-import { useInfiniteScroll } from "@/ui/hooks/useInfiniteScroll";
 import {
   useInfiniteSearchExactPhraseQuery,
   useInfiniteSearchQuery,
@@ -94,7 +93,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
 
   const [searchParams, setSearchParams] = useState<ISearchQuery>({
     currentUserId: currentUser?.id || "",
-    limit: 50,
+    limit: 100,
     type: ESearchType.FULL_TEXT,
     query: "",
     userId: undefined,
@@ -143,35 +142,33 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   }, [isExactPhrase, exactPhraseResults, fuzzyResults]);
 
   const fetchError = isExactPhrase ? exactError : fuzzyError;
-  const isFetching = isFetchingFuzzy || isFetchingExact;
+  const isFetchingInitial =
+    (isFetchingFuzzy || isFetchingExact) && activeResults.length === 0;
   const isFetchingNextPage = isFetchingNextPageFuzzy || isFetchingNextPageExact;
   const hasNextPage = isExactPhrase ? hasNextPageExact : hasNextPageFuzzy;
   const fetchNextPage = isExactPhrase ? fetchNextPageExact : fetchNextPageFuzzy;
 
   const hasResults = activeResults && activeResults.length > 0;
   const isEmpty =
-    !hasResults && !isFetching && !!debouncedSearchParams.query.trim();
+    !hasResults && !isFetchingInitial && !!debouncedSearchParams.query.trim();
 
-  const { attachScrollListener } = useInfiniteScroll({
-    hasNextPage: !!hasNextPage,
-    fetchNextPage: () => {
-      if (scrollRef.current) {
-        shouldMaintainScroll.current = true;
-        previousScrollHeight.current = scrollRef.current.scrollHeight;
-        lastScrollTop.current = scrollRef.current.scrollTop;
-      }
-      return fetchNextPage();
-    },
-    isFetchingNextPage,
-    threshold: 200,
-  });
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      const cleanup = attachScrollListener(scrollRef.current);
-      return cleanup;
+  const handleScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    if (
+      scrollHeight - scrollTop - clientHeight < 200 &&
+      scrollTop > lastScrollTop.current &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      shouldMaintainScroll.current = true;
+      previousScrollHeight.current = scrollHeight;
+      await fetchNextPage();
     }
-  }, [attachScrollListener]);
+    lastScrollTop.current = scrollTop;
+  };
 
   useEffect(() => {
     if (shouldMaintainScroll.current && scrollRef.current) {
@@ -183,7 +180,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
       shouldMaintainScroll.current = false;
       previousScrollHeight.current = 0;
     }
-  }, [activeResults]);
+  }, [exactPhraseResults, fuzzyResults]);
 
   const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
     onMessageClick?.(result, tempt);
@@ -237,27 +234,27 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
         )}
       </div>
       <div className="flex-1 overflow-hidden">
-        {isFetching && (
+        {isFetchingInitial && (
           <div className="p-8 text-center text-muted-foreground">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
             <p className="mt-2">Searching...</p>
           </div>
         )}
-        {!isFetching && !debouncedSearchParams.query && (
+        {!isFetchingInitial && !debouncedSearchParams.query && (
           <div className="p-8 text-center text-muted-foreground">
             <Search className="w-12 h-12 mx-auto mb-4 opacity-40" />
             <h3 className="text-lg font-medium mb-2">Search Messages</h3>
             <p>Type to search through your message history</p>
           </div>
         )}
-        {!isFetching && isEmpty && (
+        {!isFetchingInitial && isEmpty && (
           <div className="p-8 text-center text-muted-foreground">
             <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-40" />
             <h3 className="text-lg font-medium mb-2">No messages found</h3>
             <p>Try different keywords or check your spelling</p>
           </div>
         )}
-        {!isFetching && hasResults && (
+        {hasResults && (
           <div className="h-full overflow-hidden">
             <div className="px-4 py-2 text-sm font-medium border-b">
               {fetchError ? (
@@ -267,8 +264,15 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
               ) : (
                 <div className="flex items-center justify-between">
                   <span>
-                    Found {activeResults.length} message
+                    Found{" "}
+                    {activeResults.length >= 100 ? "99+" : activeResults.length}{" "}
+                    message
                     {activeResults.length !== 1 ? "s" : ""}
+                    {isFetchingInitial && (
+                      <span className="ml-2">
+                        <Loader className="inline w-3 h-3 animate-spin" />
+                      </span>
+                    )}
                   </span>
                   {hasNextPage && (
                     <span className="text-xs text-muted-foreground">
@@ -280,6 +284,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
             </div>
             <div
               ref={scrollRef}
+              onScroll={handleScroll}
               className="h-full overflow-y-auto"
               style={{ maxHeight: "calc(100% - 60px)" }}
             >

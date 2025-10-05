@@ -1,7 +1,8 @@
 import { IMsgEntity } from "@/core/domain/msg/entity";
 import { formatTime, getStatusIcon } from "@/ui/helper";
-import { memo } from "react";
+import { memo, useEffect, useLayoutEffect, useState } from "react";
 import { motion } from "framer-motion";
+import Highlighter from "react-highlight-words";
 
 export type TMessageItemProps = {
   message: IMsgEntity;
@@ -17,28 +18,44 @@ export const MessageItem = memo(
     hightLightId,
     highLigthtText,
   }: TMessageItemProps) => {
-    const isHighlighted =
-      hightLightId === message.id || hightLightId === message.localId;
+    const [isHighlighted, setIsHighlighted] = useState(false);
+
+    useLayoutEffect(() => {
+      if (hightLightId === message.id || hightLightId === message.localId) {
+        setIsHighlighted(true);
+        const timer = setTimeout(() => setIsHighlighted(false), 3000);
+        return () => clearTimeout(timer);
+      }
+    }, [hightLightId, message.id, message.localId]);
 
     return (
       <motion.div
-        // layout="position"
-        // initial={false}
-        // animate={{ opacity: 1 }}
-        // transition={{ duration: 0.2 }}
+        layout="position"
+        initial={false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.1 }}
         className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
       >
         <div
           className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg transition-all ${
             isHighlighted
-              ? "ring-4 ring-yellow-400 bg-yellow-100 text-gray-800 shadow-lg"
+              ? "ring-1 ring-yellow-400 bg-yellow-50 text-gray-800"
               : isCurrentUser
                 ? "bg-blue-500 text-white"
                 : "bg-white text-gray-900 border border-gray-200"
           }`}
         >
           <p className="text-sm">
-            {highLigthtText && isHighlighted ? highLigthtText : message.content}
+            {highLigthtText && isHighlighted ? (
+              <Highlighter
+                highlightClassName="bg-yellow-200"
+                searchWords={[highLigthtText]}
+                autoEscape={true}
+                textToHighlight={message.content}
+              />
+            ) : (
+              message.content
+            )}
           </p>
           <div
             className={`flex items-center justify-end mt-1 space-x-1 ${

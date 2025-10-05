@@ -25,6 +25,8 @@ export interface ISearchQuery {
   limit: number;
   createdAt?: TTimeStamp;
   type: ESearchType;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ISearchRawResultItem extends IMsgEntity {

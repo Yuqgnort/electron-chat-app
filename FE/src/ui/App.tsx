@@ -86,18 +86,18 @@ export function App() {
       return;
     try {
       const conversationId = await ensureConversationId();
-      await mockCreate100Messages(service, conversationId, [
-        currentUser.id,
-        chatBoxState.receiverUser.id,
-      ]);
-      // await service.msg.sendMessage({
-      //   content,
-      //   conversationId,
-      //   senderId: currentUser.id,
-      //   receiverId: chatBoxState.receiverUser.id,
-      //   serverId: null,
-      //   status: EMsgStatus.PENDING,
-      // });
+      // await mockCreate100Messages(service, conversationId, [
+      //   currentUser.id,
+      //   chatBoxState.receiverUser.id,
+      // ]);
+      await service.msg.sendMessage({
+        content,
+        conversationId,
+        senderId: currentUser.id,
+        receiverId: chatBoxState.receiverUser.id,
+        serverId: null,
+        status: EMsgStatus.PENDING,
+      });
       await queryClient.invalidateQueries({
         queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser.id],
       });

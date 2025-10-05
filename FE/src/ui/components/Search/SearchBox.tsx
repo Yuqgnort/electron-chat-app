@@ -5,7 +5,7 @@ import {
 } from "@/core/domain/search/entity";
 import { useAppContext } from "@/ui/context";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
-import { useGetUsersWithIgnoreIds } from "@/ui/hooks/tanstack/user";
+import { useGetUsers } from "@/ui/hooks/tanstack/user";
 import { useDebounce } from "@/ui/hooks/useDebounce";
 import {
   useSearchExactPhraseQuery,
@@ -15,16 +15,9 @@ import { formatDistanceToNow } from "date-fns";
 import { Filter, MessageSquare, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../core/Button";
-import { Checkbox } from "../core/Checkbox";
 import { Input } from "../core/Input";
 import { ScrollArea } from "../core/ScrollArea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../core/Select";
+import FilterPanel from "./FilterPanel";
 import Snippet from "./Snippet";
 
 interface SearchBoxProps {
@@ -44,12 +37,13 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     type: ESearchType.FULL_TEXT,
     query: "",
     userId: undefined,
+    endDate: undefined,
+    startDate: undefined,
   });
 
-  const { data: users = [] } = useGetUsersWithIgnoreIds(
-    service,
-    currentUser ? [currentUser.id] : []
-  );
+  console.log("SearchBox render", searchParams);
+
+  const { data: users = [] } = useGetUsers(service);
 
   const debouncedSearchParams = useDebounce(searchParams, 300);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +83,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     onClose();
   };
 
-  const handleSelectUser = async (userId: string) => {
+  const handleSelectUser = async (userId?: string) => {
     try {
       if (!currentUser) return;
       setSearchParams((prev) => ({
@@ -145,40 +139,14 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
           </Button>
         </div>
         {isFilterVisible && (
-          <div className="mt-3 flex items-center p-3 bg-muted rounded-lg space-x-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="exactPhrase"
-                checked={searchParams.type === ESearchType.EXACT_PHRASE}
-                onCheckedChange={(checked) =>
-                  setSearchParams((prev) => ({
-                    ...prev,
-                    type: checked
-                      ? ESearchType.EXACT_PHRASE
-                      : ESearchType.FULL_TEXT,
-                  }))
-                }
-              />
-              <label
-                htmlFor="exactPhrase"
-                className="text-sm text-muted-foreground"
-              >
-                Exact phrase
-              </label>
-            </div>
-            <Select onValueChange={(value) => handleSelectUser(value)}>
-              <SelectTrigger className="w-[140px] h-6!">
-                <SelectValue placeholder="Select a user" />
-              </SelectTrigger>
-              <SelectContent>
-                {users?.map((u) => (
-                  <SelectItem key={u.id} value={u.id.toString()}>
-                    {u.userName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <FilterPanel
+            users={users || []}
+            currentUser={currentUser}
+            isFilterVisible={isFilterVisible}
+            searchParams={searchParams}
+            setSearchParams={setSearchParams}
+            setIsFilterVisible={setIsFilterVisible}
+          />
         )}
       </div>
       <div className="flex-1 overflow-hidden">

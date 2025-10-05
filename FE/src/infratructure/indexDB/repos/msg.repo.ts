@@ -4,6 +4,7 @@ import { TPaginationResult, TTimeStamp } from "@/core/domain/type";
 import Dexie from "dexie";
 import { genUUID } from "../helper";
 import { ChatDb } from "../init";
+import { c } from "node_modules/framer-motion/dist/types.d-Cjd591yU";
 
 //////////////////////
 
@@ -56,8 +57,13 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
 
         return {
           data: data.reverse(),
-          nextCursor: results.length > limit ? data[0].createdAt : null, // có thể load older
-          prevCursor: null, // không có newer vì đây là latest
+          nextCursor:
+            results.length > limit &&
+            data.length > 0 &&
+            data[0].createdAt !== cursor
+              ? data[0].createdAt
+              : null,
+          prevCursor: null,
         };
       }
 
@@ -78,8 +84,8 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
 
         return {
           data: data.reverse(),
-          nextCursor: results.length > limit ? data[0].createdAt : null, // tiếp tục older (tin nhắn cũ hơn)
-          prevCursor: data.length > 0 ? data[data.length - 1].createdAt : null, // có thể newer (tin nhắn mới hơn)
+          nextCursor: results.length > limit ? data[0].createdAt : null,
+          prevCursor: data.length > 0 ? data[data.length - 1].createdAt : null,
         };
       }
 
@@ -98,10 +104,17 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
         data = results.slice(0, limit);
 
         return {
-          data,
-          nextCursor: data.length > 0 ? data[0].createdAt : null, // có thể older (tin nhắn cũ hơn)
+          data: data,
+          nextCursor:
+            data.length > 0 && data[0].createdAt !== cursor
+              ? data[0].createdAt
+              : null,
           prevCursor:
-            results.length > limit ? data[data.length - 1].createdAt : null, // tiếp tục newer (tin nhắn mới hơn)
+            results.length > limit &&
+            data.length > 0 &&
+            data[data.length - 1].createdAt !== cursor
+              ? data[data.length - 1].createdAt
+              : null,
         };
       }
 
@@ -132,16 +145,25 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
 
         const olderData = older.slice(0, half).reverse();
         const newerData = newer.slice(0, half);
-
         data = [...olderData, ...newerData];
 
+        const unique = [
+          ...new Map(
+            data.map((item) => [`${item.id}-${item.localId}`, item])
+          ).values(),
+        ];
+
         return {
-          data,
-          nextCursor: olderData.length > 0 ? olderData[0].createdAt : null, // có thể load older
+          data: unique,
+          nextCursor:
+            olderData.length > 0 && olderData[0].createdAt !== cursor
+              ? olderData[0].createdAt
+              : null,
           prevCursor:
-            newerData.length > 0
+            newerData.length > 0 &&
+            newerData[newerData.length - 1].createdAt !== cursor
               ? newerData[newerData.length - 1].createdAt
-              : null, // có thể load newer
+              : null,
         };
       }
 

@@ -10,20 +10,19 @@ import {
 import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import MessageList from "./MessageList";
-
-type TMessageListProps = {
-  receiverUserId: string;
-};
+import { Button } from "../core/Button";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 
 const updateMessageInCache = (
   payload: IMsgEntity,
   queryClient: QueryClient,
   conversationId?: string | null,
-  limit: number = 50
+  limit: number = 50,
+  initialCursor: number | null = null
 ) => {
   if (!conversationId) return;
   queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
-    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit],
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, initialCursor],
     (oldData) => {
       if (!oldData || !oldData.pages) return oldData;
       const rs = {
@@ -50,11 +49,12 @@ const addNewMessageToLastPageCache = (
   payload: IMsgEntity,
   queryClient: QueryClient,
   conversationId?: string | null,
-  limit: number = 50
+  limit: number = 50,
+  initialCursor: number | null = null
 ) => {
   if (!conversationId) return;
   queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
-    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit],
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, initialCursor],
     (oldData) => {
       if (!oldData || !oldData.pages || oldData.pages.length === 0) {
         return {
@@ -94,13 +94,11 @@ const addNewMessageToLastPageCache = (
   );
 };
 
-export function MessageListWrapper({
-  receiverUserId: userId,
-}: TMessageListProps) {
+export function MessageListWrapper() {
   const queryClient = useQueryClient();
   const { service, eventBus } = useAppContext();
   const { currentUser } = useCurrentUserStore();
-  const { chatBoxState } = useChatWindowStore();
+  const { chatBoxState, setChatBoxState } = useChatWindowStore();
 
   const {
     data: messages = [],
@@ -129,12 +127,26 @@ export function MessageListWrapper({
     }
   };
 
+  const handleJumpToNewest = () => {
+    setChatBoxState({
+      ...chatBoxState,
+      cursor: null,
+      highlightedMessageId: null,
+      highlightedMessageText: null,
+    });
+  };
+
   const firstMessageId = messages.length > 0 ? 1 : 0;
-  const lastMessageId = messages.length;
   const allMessagesCount = messages.length;
 
   useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
-    updateMessageInCache(payload, queryClient, chatBoxState.conversationId, 20);
+    updateMessageInCache(
+      payload,
+      queryClient,
+      chatBoxState.conversationId,
+      20,
+      chatBoxState?.cursor
+    );
   });
 
   useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
@@ -143,28 +155,40 @@ export function MessageListWrapper({
       payload,
       queryClient,
       payload.conversationId,
-      20
+      20,
+      chatBoxState?.cursor
     );
   });
 
   if (!currentUser) return null;
 
   return (
-    <MessageList
-      direction={chatBoxState.cursor ? "around" : "latest"}
-      messages={messages}
-      allMessagesCount={allMessagesCount}
-      firstMessageId={firstMessageId}
-      lastMessageId={lastMessageId}
-      isLoadingTop={isFetchingNextPage}
-      isLoadingBottom={isFetchingPreviousPage}
-      highlightedMessageId={chatBoxState?.highlightedMessageId}
-      highlightedMessageText={chatBoxState?.highlightedMessageText}
-      currentUserId={currentUser.id}
-      isCanLoadMoreBottom={hasNextPage}
-      isCanLoadMoreTop={hasPreviousPage}
-      onLoadMoreTop={handleLoadMoreTop}
-      onLoadMoreBottom={handleLoadMoreBottom}
-    />
+    <div className="relative h-full flex flex-col">
+      <MessageList
+        direction={chatBoxState.cursor ? "around" : "latest"}
+        messages={messages}
+        allMessagesCount={allMessagesCount}
+        firstMessageId={firstMessageId}
+        isLoadingTop={isFetchingNextPage}
+        isLoadingBottom={isFetchingPreviousPage}
+        highlightedMessageId={chatBoxState?.highlightedMessageId}
+        highlightedMessageText={chatBoxState?.highlightedMessageText}
+        currentUserId={currentUser.id}
+        isCanLoadMoreBottom={hasPreviousPage}
+        isCanLoadMoreTop={hasNextPage}
+        onLoadMoreTop={handleLoadMoreTop}
+        onLoadMoreBottom={handleLoadMoreBottom}
+      />
+      {chatBoxState.cursor && hasPreviousPage && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute bottom-4 right-4 "
+          onClick={handleJumpToNewest}
+        >
+          <ArrowDownIcon />
+        </Button>
+      )}
+    </div>
   );
 }

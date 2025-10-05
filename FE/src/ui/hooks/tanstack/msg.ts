@@ -20,7 +20,7 @@ export const useGetMessagesByConvId = (
   enabled: boolean = true
 ) => {
   return useInfiniteQuery({
-    queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, convId, limit],
+    queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, convId, limit, initialCursor],
     queryFn: async ({ pageParam }) => {
       const rs = await service.msg.getMsgsByConvId(
         convId!,
@@ -28,7 +28,6 @@ export const useGetMessagesByConvId = (
         pageParam.direction,
         pageParam.cursor
       );
-
       return rs;
     },
     initialPageParam: {
@@ -45,13 +44,14 @@ export const useGetMessagesByConvId = (
         ? { cursor: firstPage.prevCursor, direction: "newer" as TMsgDirection }
         : null;
     },
+
     enabled: !!convId && enabled,
     select: (data) => {
-      console.log("All pages data:", data);
-      return mergeKSortedArrays<IMsgEntity>({
+      const merger = mergeKSortedArrays<IMsgEntity>({
         arrays: data?.pages.map((page) => page?.data ?? []) || [],
         compareFn: (a, b) => a.createdAt - b.createdAt,
       });
+      return merger;
     },
   });
 };

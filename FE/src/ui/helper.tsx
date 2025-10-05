@@ -132,3 +132,43 @@ export function mergeKSortedArrays<T>({
 
   return result;
 }
+
+export function mergeKSortedArraysUnique<T extends { id: string | number }>({
+  arrays,
+  compareFn,
+}: {
+  arrays?: T[][];
+  compareFn: (a: T, b: T) => number;
+}): T[] {
+  if (!arrays || arrays.length === 0) return [];
+  const result: T[] = [];
+  const heap = new MinHeap<HeapNode<T>>((a, b) => compareFn(a.value, b.value));
+
+  arrays.forEach((arr, i) => {
+    if (arr.length > 0) {
+      heap.push({ value: arr[0], arrayIndex: i, elementIndex: 0 });
+    }
+  });
+
+  const seen = new Set<string | number>();
+
+  while (!heap.isEmpty()) {
+    const node = heap.pop()!;
+    if (!seen.has(node.value.id)) {
+      result.push(node.value);
+      seen.add(node.value.id);
+    }
+
+    const { arrayIndex, elementIndex } = node;
+    const nextIndex = elementIndex + 1;
+    if (nextIndex < arrays[arrayIndex].length) {
+      heap.push({
+        value: arrays[arrayIndex][nextIndex],
+        arrayIndex,
+        elementIndex: nextIndex,
+      });
+    }
+  }
+
+  return result;
+}

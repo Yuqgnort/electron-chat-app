@@ -60,7 +60,7 @@ export function Sidebar() {
           highlightedMessageText: temp,
           cursor: result.createdAt,
         });
-        queryClient.resetQueries({
+        queryClient.invalidateQueries({
           queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY],
         });
         closeSearch();

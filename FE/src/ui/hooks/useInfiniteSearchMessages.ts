@@ -8,6 +8,10 @@ export type TInfiniteSearchParams = {
   staleTime?: number;
 };
 
+export const INFINITE_SEARCH_QUERY_KEY = "infiniteMessageSearch";
+export const INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY =
+  "infiniteMessageSearchExactPhrase";
+
 export function useInfiniteSearchQuery({
   query,
   enabled = true,
@@ -25,7 +29,7 @@ export function useInfiniteSearchQuery({
 
   return useInfiniteQuery({
     queryKey: [
-      "infiniteMessageSearch",
+      INFINITE_SEARCH_QUERY_KEY,
       query.query,
       conversationId,
       limit,
@@ -70,7 +74,7 @@ export function useInfiniteSearchExactPhraseQuery({
 
   return useInfiniteQuery({
     queryKey: [
-      "infiniteMessageSearchExactPhrase",
+      INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY,
       query.query,
       conversationId,
       limit,

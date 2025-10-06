@@ -17,6 +17,10 @@ import { GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID } from "./hooks/tanstack/co
 import { useGetUsers } from "./hooks/tanstack/user";
 import { useCheckIsOnNetwork } from "./hooks/useCheckIsOnline";
 import { useConnectSocket } from "./hooks/useConnectSocket";
+import {
+  INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY,
+  INFINITE_SEARCH_QUERY_KEY,
+} from "./hooks/useInfiniteSearchMessages";
 
 const mockCreate100Messages = async (
   service: any,
@@ -101,6 +105,12 @@ export function App() {
       await queryClient.invalidateQueries({
         queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser.id],
       });
+      await queryClient.invalidateQueries({
+        queryKey: [INFINITE_SEARCH_QUERY_KEY],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: [INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY],
+      });
     } catch (error) {
       throw error;
     }
@@ -140,11 +150,14 @@ export function App() {
   }
 
   return (
-    <MainLayout>
-      <ChatWindow
-        onSendMessage={handleSendMessage}
-        receiverUser={chatBoxState?.receiverUser}
-      />
-    </MainLayout>
+    <>
+      <MainLayout>
+        <ChatWindow
+          onSendMessage={handleSendMessage}
+          receiverUser={chatBoxState?.receiverUser}
+        />
+      </MainLayout>
+      {/* <RankingTestPanel /> */}
+    </>
   );
 }

@@ -8,6 +8,9 @@ export type TParams = {
   staleTime?: number;
 };
 
+export const SEARCH_MESSAGES_QUERY_KEY = "messageSearch";
+export const SEARCH_EXACT_PHRASE_QUERY_KEY = "messageSearchExactPhrase";
+
 export function useSearchMessagesQuery({
   query,
   enabled = true,
@@ -23,7 +26,7 @@ export function useSearchMessagesQuery({
     query.type === ESearchType.FULL_TEXT;
   return useQuery({
     queryKey: [
-      "messageSearch",
+      SEARCH_MESSAGES_QUERY_KEY,
       query,
       conversationId,
       limit,
@@ -55,7 +58,7 @@ export function useSearchExactPhraseQuery({
 
   return useQuery({
     queryKey: [
-      "messageSearchExactPhrase",
+      SEARCH_EXACT_PHRASE_QUERY_KEY,
       query,
       conversationId,
       limit,

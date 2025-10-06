@@ -3,7 +3,6 @@ import { MessageCircleDashed } from "lucide-react";
 import { ChatHeader } from "./ChatHeader";
 import { MessageInput } from "./MessageInput";
 import { MessageListWrapper } from "./MessageListWrapper";
-import { SimpleTypingIndicator } from "./SimpleTypingIndicator";
 
 interface ChatWindowProps {
   receiverUser?: IUserEntity | null;

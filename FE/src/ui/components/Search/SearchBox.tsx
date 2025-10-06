@@ -8,9 +8,12 @@ import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetUsers } from "@/ui/hooks/tanstack/user";
 import { useDebounce } from "@/ui/hooks/useDebounce";
 import {
+  INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY,
+  INFINITE_SEARCH_QUERY_KEY,
   useInfiniteSearchExactPhraseQuery,
   useInfiniteSearchQuery,
 } from "@/ui/hooks/useInfiniteSearchMessages";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Filter, Loader, MessageSquare, Search, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -90,6 +93,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const { service } = useAppContext();
   const { currentUser } = useCurrentUserStore();
+  const queryClient = useQueryClient();
 
   const [searchParams, setSearchParams] = useState<ISearchQuery>({
     currentUserId: currentUser?.id || "",
@@ -184,12 +188,20 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
 
   const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
     onMessageClick?.(result, tempt);
-    onClose();
   };
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({
+      queryKey: [INFINITE_SEARCH_QUERY_KEY],
+    });
+    queryClient.invalidateQueries({
+      queryKey: [INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY],
+    });
+  }, [debouncedSearchParams.query, queryClient]);
 
   if (!isOpen || !currentUser) return null;
 

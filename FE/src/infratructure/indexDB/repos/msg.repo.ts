@@ -4,7 +4,6 @@ import { TPaginationResult, TTimeStamp } from "@/core/domain/type";
 import Dexie from "dexie";
 import { genUUID } from "../helper";
 import { ChatDb } from "../init";
-import { c } from "node_modules/framer-motion/dist/types.d-Cjd591yU";
 
 //////////////////////
 
@@ -172,6 +171,9 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
         nextCursor: null,
         prevCursor: null,
       };
+    },
+    async countAll() {
+      return db.messages.count();
     },
   };
 }

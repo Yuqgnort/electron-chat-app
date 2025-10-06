@@ -49,10 +49,13 @@ export function Sidebar() {
   const handleMessageClick = useCallback(
     async (result: ISearchRawResultItem, temp: string) => {
       if (!result.conversationId || !result.senderId) return;
-
+      const senderId =
+        result.senderId === currentUser?.id
+          ? result.receiverId
+          : result.senderId;
+      if (!senderId) return;
       try {
-        const receiverUser = await mutateAsync(result.senderId);
-
+        const receiverUser = await mutateAsync(senderId);
         setChatBoxState({
           receiverUser,
           conversationId: result.conversationId,
@@ -63,7 +66,7 @@ export function Sidebar() {
         queryClient.invalidateQueries({
           queryKey: [GET_MESSAGE_BY_CONV_ID_QUERY_KEY],
         });
-        closeSearch();
+        // closeSearch();
       } catch (error) {
         console.error("Failed to fetch user:", error);
       }

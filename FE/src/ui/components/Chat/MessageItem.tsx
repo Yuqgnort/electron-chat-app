@@ -1,8 +1,9 @@
 import { IMsgEntity } from "@/core/domain/msg/entity";
 import { formatTime, getStatusIcon } from "@/ui/helper";
-import { memo, useEffect, useLayoutEffect, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Highlighter from "react-highlight-words";
+import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 
 export type TMessageItemProps = {
   message: IMsgEntity;
@@ -19,12 +20,23 @@ export const MessageItem = memo(
     highLigthtText,
   }: TMessageItemProps) => {
     const [isHighlighted, setIsHighlighted] = useState(false);
+    const { setChatBoxState, chatBoxState } = useChatWindowStore();
 
     useLayoutEffect(() => {
+      const timer = setTimeout(() => {
+        setIsHighlighted(false);
+        setChatBoxState({
+          ...chatBoxState,
+          highlightedMessageId: null,
+          highlightedMessageText: null,
+        });
+      }, 3000);
       if (hightLightId === message.id || hightLightId === message.localId) {
         setIsHighlighted(true);
-        const timer = setTimeout(() => setIsHighlighted(false), 3000);
         return () => clearTimeout(timer);
+      } else {
+        setIsHighlighted(false);
+        clearTimeout(timer);
       }
     }, [hightLightId, message.id, message.localId]);
 
@@ -45,7 +57,7 @@ export const MessageItem = memo(
                 : "bg-white text-gray-900 border border-gray-200"
           }`}
         >
-          <p className="text-sm">
+          <p className="text-sm whitespace-pre-wrap break-words">
             {highLigthtText && isHighlighted ? (
               <Highlighter
                 highlightClassName="bg-yellow-200"

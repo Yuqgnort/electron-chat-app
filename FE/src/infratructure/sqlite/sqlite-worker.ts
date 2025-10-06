@@ -8,20 +8,34 @@ let db: OpfsDatabase;
 
 const createFtsTableSQL = (db: OpfsDatabase) => {
   try {
-    db.exec(`
-      CREATE VIRTUAL TABLE fts_index_global USING fts5(
-        messageId UNINDEXED,
-        conversationId UNINDEXED,
-        senderId UNINDEXED,
-        receiverId UNINDEXED,
-        content,
-        createdAt UNINDEXED,
-        tokenize = 'unicode61 remove_diacritics 2',
-        prefix = 1,
-        prefix = 2,
-        prefix = 3
-      );
+    // Check if FTS table already exists
+    const tableExists = db.exec(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='fts_index_global'
     `);
+
+    if (
+      !tableExists ||
+      (Array.isArray(tableExists) && tableExists.length === 0)
+    ) {
+      db.exec(`
+        CREATE VIRTUAL TABLE fts_index_global USING fts5(
+          messageId UNINDEXED,
+          conversationId UNINDEXED,
+          senderId UNINDEXED,
+          receiverId UNINDEXED,
+          content,
+          createdAt UNINDEXED,
+          tokenize = 'unicode61 remove_diacritics 2',
+          prefix = 1,
+          prefix = 2,
+          prefix = 3
+        );
+      `);
+      console.log("Created new FTS table");
+    } else {
+      console.log("FTS table already exists, preserving data");
+    }
   } catch (error) {
     console.error("Failed to create fts_index_global table:", error);
     throw error;
@@ -56,12 +70,16 @@ const createConversationMetadataTableSQL = (db: OpfsDatabase) => {
   }
 };
 
-const checkTableExists = (db: OpfsDatabase) => {
+const ensureTablesExist = (db: OpfsDatabase) => {
   try {
-    db.exec("DROP TABLE IF EXISTS fts_index_global");
-    db.exec("DROP TABLE IF EXISTS conversation_metadata");
+    // Check if tables exist, don't drop them to preserve data
+    const tableCheck = db.exec(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND (name='fts_index_global' OR name='conversation_metadata')
+    `);
+    console.log("Existing FTS tables found, preserving data");
   } catch (error) {
-    console.warn("Could not drop existing tables:", error);
+    console.warn("Error checking existing tables:", error);
   }
 };
 
@@ -75,7 +93,7 @@ const initDb = async () => {
     },
   });
   db = new sqlite3.oo1.OpfsDb("/mydb.sqlite3");
-  checkTableExists(db);
+  ensureTablesExist(db);
   createFtsTableSQL(db);
   createConversationMetadataTableSQL(db);
 };

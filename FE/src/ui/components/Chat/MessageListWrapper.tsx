@@ -9,10 +9,9 @@ import {
 } from "@/ui/hooks/tanstack/msg";
 import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
-import MessageList from "./MessageList";
+import { ArrowDownIcon } from "lucide-react";
 import { Button } from "../core/Button";
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-import { useMemo } from "react";
+import MessageList from "./MessageList";
 
 const updateMessageInCache = (
   payload: IMsgEntity,
@@ -112,7 +111,7 @@ export function MessageListWrapper() {
   } = useGetMessagesByConvId(
     service,
     chatBoxState.conversationId,
-    20,
+    40,
     chatBoxState?.cursor
   );
 
@@ -145,20 +144,18 @@ export function MessageListWrapper() {
       payload,
       queryClient,
       chatBoxState.conversationId,
-      20,
+      40,
       chatBoxState?.cursor
     );
   });
 
   useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
-    console.log("MsgCreated event received:", payload);
-
     if (payload.conversationId !== chatBoxState.conversationId) return;
     addNewMessageToLastPageCache(
       payload,
       queryClient,
       payload.conversationId,
-      20,
+      40,
       chatBoxState?.cursor
     );
   });

@@ -83,10 +83,16 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     query: ISearchQuery,
     ranking: TRankingColection
   ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
+    const sanitize = sanitizeString(query.query);
+
     console.log(
       "Performing full-text search with query:",
-      buildPhraseSearch(sanitizeString(query.query))
+      buildPhraseSearch(sanitize)
     );
+
+    if (!sanitize) {
+      return { items: [], hasMore: false };
+    }
 
     const limit = query.limit || 50;
     const validatedRanking = ensureRankingConfiguration(ranking);
@@ -99,9 +105,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       SELECT ${buildRankingSelectSQL(validatedRanking)}
       FROM fts_index_global f
       ${buildConversationMetadataJoinSQL()}
-      WHERE f.fts_index_global MATCH '${buildPhraseSearch(
-        sanitizeString(query.query)
-      )}'
+      WHERE f.fts_index_global MATCH '${buildPhraseSearch(sanitize)}'
     `;
 
     if (query.conversationId) {
@@ -134,6 +138,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     query: ISearchQuery,
     ranking: TRankingColection
   ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
+    const sanitize = sanitizeString(query.query);
+    console.log("Performing exact phrase search with query:", sanitize);
+
+    if (!sanitize) {
+      return { items: [], hasMore: false };
+    }
+
     const limit = query.limit || 50;
     const validatedRanking = ensureRankingConfiguration(ranking);
 
@@ -324,7 +335,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       const result = (await db.select(
         `SELECT messageId FROM fts_index_global`
       )) as any[];
-      return result ? result.map((row: any) => row.id) : [];
+      return result ? result.map((row: any) => row.messageId) : [];
     },
 
     async getIndexedUserIds(): Promise<TID[]> {

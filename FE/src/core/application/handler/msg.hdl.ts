@@ -442,7 +442,6 @@ export const indexExistingMessages = async (
     console.log(
       `Found ${unindexedMessages.length} unindexed messages out of ${allMessages.length} total`
     );
-
     let indexed = 0;
     for (const msg of unindexedMessages) {
       try {
@@ -454,9 +453,7 @@ export const indexExistingMessages = async (
           content: createNormalizeSearchString(msg.content),
           receiverId: msg.receiverId,
         });
-
         indexed++;
-
         if (indexed % 100 === 0) {
           console.log(
             `Indexed ${indexed}/${unindexedMessages.length} messages...`

@@ -72,11 +72,11 @@ export function ChatHeader({
             </span>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        {/* <div className="flex items-center space-x-2">
           <Button variant="ghost" size="icon" className="size-8">
             <Search />
           </Button>
-        </div>
+        </div> */}
       </div>
     </div>
   );

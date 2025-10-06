@@ -14,4 +14,5 @@ export interface IMsgRepo {
     cursor: TTimeStamp | null
   ): Promise<TPaginationResult<IMsgEntity, TTimeStamp> | null>;
   getAll(): Promise<IMsgEntity[] | null>;
+  countAll(): Promise<number | null>;
 }

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
-import { testRankingReturn } from "./test-rank-return";
-import { runRankingTests } from "./ranking-tests";
+import { testRankingReturn } from "../test-rank-return";
+import { runRankingTests } from "../ranking-tests";
 
 export const RankingTestPanel: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);

@@ -151,6 +151,8 @@ export function MessageListWrapper() {
   });
 
   useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
+    console.log("MsgCreated event received:", payload);
+
     if (payload.conversationId !== chatBoxState.conversationId) return;
     addNewMessageToLastPageCache(
       payload,
@@ -159,6 +161,20 @@ export function MessageListWrapper() {
       20,
       chatBoxState?.cursor
     );
+  });
+
+  useSubscribeEventBus(eventBus, "ConvCreated", async (payload) => {
+    if (!chatBoxState.conversationId && chatBoxState.receiverUser) {
+      const convKey = [currentUser?.id, chatBoxState.receiverUser.id]
+        .sort()
+        .join(":");
+      if (payload.key === convKey) {
+        setChatBoxState({
+          ...chatBoxState,
+          conversationId: payload.id,
+        });
+      }
+    }
   });
 
   if (!currentUser) return null;

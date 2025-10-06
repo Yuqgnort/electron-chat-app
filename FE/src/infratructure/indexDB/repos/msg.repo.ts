@@ -155,12 +155,15 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
         return {
           data: unique,
           nextCursor:
-            olderData.length > 0 && olderData[0].createdAt !== cursor
+            olderData.length > 0 &&
+            olderData[0].createdAt !== cursor &&
+            olderData.length >= half
               ? olderData[0].createdAt
               : null,
           prevCursor:
             newerData.length > 0 &&
-            newerData[newerData.length - 1].createdAt !== cursor
+            newerData[newerData.length - 1].createdAt !== cursor &&
+            newerData.length >= half
               ? newerData[newerData.length - 1].createdAt
               : null,
         };

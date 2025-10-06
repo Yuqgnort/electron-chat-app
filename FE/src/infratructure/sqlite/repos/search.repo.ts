@@ -85,11 +85,6 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
   ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
     const sanitize = sanitizeString(query.query);
 
-    console.log(
-      "Performing full-text search with query:",
-      buildPhraseSearch(sanitize)
-    );
-
     if (!sanitize) {
       return { items: [], hasMore: false };
     }
@@ -139,7 +134,6 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     ranking: TRankingColection
   ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
     const sanitize = sanitizeString(query.query);
-    console.log("Performing exact phrase search with query:", sanitize);
 
     if (!sanitize) {
       return { items: [], hasMore: false };
@@ -264,28 +258,54 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     },
 
     async indexMessage(messageData: IMessageIndexData): Promise<void> {
-      validateRequiredFields(messageData, [
-        "messageId",
-        "content",
-        "senderId",
-        "conversationId",
-        "createdAt",
-        "receiverId",
-      ]);
+      try {
+        validateRequiredFields(messageData, [
+          "messageId",
+          "content",
+          "senderId",
+          "conversationId",
+          "createdAt",
+          "receiverId",
+        ]);
 
-      // Index the message in FTS table
-      const insertMessageSQL = `
-        INSERT INTO fts_index_global(messageId, content, senderId, conversationId, createdAt, receiverId) 
-        VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}', '${messageData.receiverId}')
-      `;
+        // Index the message in FTS table
+        const insertMessageSQL = `
+          INSERT INTO fts_index_global(messageId, content, senderId, conversationId, createdAt, receiverId) 
+          VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}', '${messageData.receiverId}')
+        `;
 
-      await db.exec(insertMessageSQL);
+        await db.exec(insertMessageSQL);
 
-      // Update conversation metadata for ranking
-      await this.updateConversationMetadata(
-        messageData.conversationId,
-        messageData.createdAt
-      );
+        // Update conversation metadata for ranking
+        await this.updateConversationMetadata(
+          messageData.conversationId,
+          messageData.createdAt
+        );
+      } catch (error) {
+        console.error("Failed to index message:", error);
+        // Re-initialize the database if table doesn't exist
+        if (error instanceof Error && error.message.includes("no such table")) {
+          console.log("Table missing, reinitializing database...");
+          await db.init();
+          // Retry the operation once
+          try {
+            const insertMessageSQL = `
+              INSERT INTO fts_index_global(messageId, content, senderId, conversationId, createdAt, receiverId) 
+              VALUES ('${messageData.messageId}', '${sanitizeString(messageData.content)}', '${sanitizeString(messageData.senderId)}', '${messageData.conversationId}', '${messageData.createdAt.toString()}', '${messageData.receiverId}')
+            `;
+            await db.exec(insertMessageSQL);
+            await this.updateConversationMetadata(
+              messageData.conversationId,
+              messageData.createdAt
+            );
+          } catch (retryError) {
+            console.error("Failed to index message after retry:", retryError);
+            throw retryError;
+          }
+        } else {
+          throw error;
+        }
+      }
     },
 
     async bulkIndexMessages(messages: IMessageIndexData[]): Promise<void> {
@@ -320,22 +340,46 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     },
 
     async clearIndex(): Promise<void> {
-      await db.exec(`DELETE FROM fts_index_global`);
-      await db.exec(`DELETE FROM conversation_metadata`);
+      try {
+        await db.exec(`DELETE FROM fts_index_global`);
+      } catch (error) {
+        console.warn("Failed to clear fts_index_global table:", error);
+      }
+      try {
+        await db.exec(`DELETE FROM conversation_metadata`);
+      } catch (error) {
+        console.warn("Failed to clear conversation_metadata table:", error);
+      }
     },
 
     async isMessageIndexed(messageId: TID): Promise<boolean> {
-      const result = (await db.select(`
-        SELECT COUNT(*) as count FROM fts_index_global WHERE messageId = '${messageId}'
-      `)) as any[];
-      return result && result.length > 0 && result[0].count > 0;
+      try {
+        const result = (await db.select(`
+          SELECT COUNT(*) as count FROM fts_index_global WHERE messageId = '${messageId}'
+        `)) as any[];
+        return result && result.length > 0 && result[0].count > 0;
+      } catch (error) {
+        console.warn(
+          "Failed to check if message is indexed, table might not exist:",
+          error
+        );
+        return false;
+      }
     },
 
     async getIndexedMessageIds(): Promise<TID[]> {
-      const result = (await db.select(
-        `SELECT messageId FROM fts_index_global`
-      )) as any[];
-      return result ? result.map((row: any) => row.messageId) : [];
+      try {
+        const result = (await db.select(
+          `SELECT messageId FROM fts_index_global`
+        )) as any[];
+        return result ? result.map((row: any) => row.messageId) : [];
+      } catch (error) {
+        console.warn(
+          "Failed to get indexed message IDs, table might not exist:",
+          error
+        );
+        return [];
+      }
     },
 
     async getIndexedUserIds(): Promise<TID[]> {

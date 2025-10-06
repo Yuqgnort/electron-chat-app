@@ -95,8 +95,6 @@ export function App() {
       //   chatBoxState.receiverUser.id,
       // ]);
 
-      console.log("content", content);
-
       await service.msg.sendMessage({
         content,
         conversationId,

@@ -161,8 +161,6 @@ export async function resetChatDataKeepUsers(
   onSuccess?: () => void
 ): Promise<ResetResult> {
   try {
-    await searchRepo.clearIndex();
-    await sqliteDb.reset();
     await db.transaction(
       "rw",
       [db.messages, db.conversations, db.conversationParts, db.pendingMessages],
@@ -173,6 +171,10 @@ export async function resetChatDataKeepUsers(
         await db.pendingMessages.clear();
       }
     );
+    await searchRepo.clearIndex();
+    await sqliteDb.reset();
+    // Reinitialize the search repository to ensure tables are properly created
+    await searchRepo.init();
     if (onSuccess) onSuccess();
     return {
       success: true,

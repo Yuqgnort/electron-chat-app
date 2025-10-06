@@ -8,16 +8,24 @@ let db: OpfsDatabase;
 
 const createFtsTableSQL = (db: OpfsDatabase) => {
   try {
-    // Check if FTS table already exists
-    const tableExists = db.exec(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='fts_index_global'
-    `);
+    // Check if FTS table already exists using a more reliable method
+    let tableExists = false;
+    try {
+      const result: any[] = [];
+      db.exec({
+        sql: `SELECT name FROM sqlite_master WHERE type='table' AND name='fts_index_global'`,
+        rowMode: "object",
+        callback: (row: any) => {
+          result.push(row);
+        },
+      });
+      tableExists = result.length > 0;
+    } catch (checkError) {
+      console.warn("Error checking table existence:", checkError);
+      tableExists = false;
+    }
 
-    if (
-      !tableExists ||
-      (Array.isArray(tableExists) && tableExists.length === 0)
-    ) {
+    if (!tableExists) {
       db.exec(`
         CREATE VIRTUAL TABLE fts_index_global USING fts5(
           messageId UNINDEXED,
@@ -70,14 +78,42 @@ const createConversationMetadataTableSQL = (db: OpfsDatabase) => {
   }
 };
 
+const validateFtsTable = (db: OpfsDatabase): boolean => {
+  try {
+    // Try to query the FTS table to ensure it actually works
+    const results: any[] = [];
+    db.exec({
+      sql: `SELECT COUNT(*) as count FROM fts_index_global LIMIT 1`,
+      rowMode: "object",
+      callback: (row: any) => {
+        results.push(row);
+      },
+    });
+    console.log("FTS table validation successful");
+    return true;
+  } catch (error) {
+    console.warn("FTS table validation failed:", error);
+    return false;
+  }
+};
+
 const ensureTablesExist = (db: OpfsDatabase) => {
   try {
-    // Check if tables exist, don't drop them to preserve data
-    const tableCheck = db.exec(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND (name='fts_index_global' OR name='conversation_metadata')
-    `);
-    console.log("Existing FTS tables found, preserving data");
+    // Check if tables exist using a more reliable method
+    const existingTables: string[] = [];
+    db.exec({
+      sql: `SELECT name FROM sqlite_master WHERE type='table' AND (name='fts_index_global' OR name='conversation_metadata')`,
+      rowMode: "object",
+      callback: (row: any) => {
+        existingTables.push(row.name);
+      },
+    });
+
+    if (existingTables.length > 0) {
+      console.log("Existing tables found:", existingTables.join(", "));
+    } else {
+      console.log("No existing tables found, will create new ones");
+    }
   } catch (error) {
     console.warn("Error checking existing tables:", error);
   }
@@ -96,6 +132,38 @@ const initDb = async () => {
   ensureTablesExist(db);
   createFtsTableSQL(db);
   createConversationMetadataTableSQL(db);
+
+  // Validate that the FTS table actually works
+  if (!validateFtsTable(db)) {
+    console.log("FTS table validation failed, attempting to recreate...");
+    try {
+      // Drop and recreate the FTS table
+      db.exec(`DROP TABLE IF EXISTS fts_index_global`);
+      db.exec(`
+        CREATE VIRTUAL TABLE fts_index_global USING fts5(
+          messageId UNINDEXED,
+          conversationId UNINDEXED,
+          senderId UNINDEXED,
+          receiverId UNINDEXED,
+          content,
+          createdAt UNINDEXED,
+          tokenize = 'unicode61 remove_diacritics 2',
+          prefix = 1,
+          prefix = 2,
+          prefix = 3
+        );
+      `);
+      console.log("FTS table recreated successfully");
+
+      // Validate again
+      if (!validateFtsTable(db)) {
+        throw new Error("FTS table still not working after recreation");
+      }
+    } catch (recreateError) {
+      console.error("Failed to recreate FTS table:", recreateError);
+      throw recreateError;
+    }
+  }
 };
 
 const postMessageHandler = async (
@@ -156,6 +224,8 @@ const postMessageHandler = async (
     try {
       const root = await navigator.storage.getDirectory();
       await root.removeEntry("mydb.sqlite3");
+      // Reinitialize the database after reset to ensure tables exist
+      await initDb();
       self.postMessage({ type: "reset-complete", id });
     } catch (error) {
       self.postMessage({

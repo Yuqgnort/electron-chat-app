@@ -1,9 +1,9 @@
 import { IMsgEntity } from "@/core/domain/msg/entity";
 import { formatTime, getStatusIcon } from "@/ui/helper";
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import Highlighter from "react-highlight-words";
 import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
+import { motion } from "framer-motion";
+import { memo, useLayoutEffect, useState } from "react";
+import Snippet from "../Search/Snippet";
 
 export type TMessageItemProps = {
   message: IMsgEntity;
@@ -59,11 +59,10 @@ export const MessageItem = memo(
         >
           <p className="text-sm whitespace-pre-wrap break-words">
             {highLigthtText && isHighlighted ? (
-              <Highlighter
-                highlightClassName="bg-yellow-200"
-                searchWords={[highLigthtText]}
-                autoEscape={true}
-                textToHighlight={message.content}
+              <Snippet
+                keywords={[highLigthtText]}
+                text={message.content}
+                noTruncate
               />
             ) : (
               message.content

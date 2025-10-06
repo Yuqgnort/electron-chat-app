@@ -36,4 +36,14 @@ export interface ISearchRepository {
   // Maintenance operations
   optimizeIndex(): Promise<void>;
   validateIndex(): Promise<boolean>;
+
+  // Ranking and conversation metadata operations
+  updateConversationMetadata(
+    conversationId: TID,
+    messageTimestamp: number
+  ): Promise<void>;
+  getConversationMetadata(
+    conversationId: TID
+  ): Promise<{ lastMessagesUpdateAt: number; messageCount: number } | null>;
+  cleanupConversationMetadata(): Promise<void>;
 }

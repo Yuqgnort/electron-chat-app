@@ -28,9 +28,38 @@ const createFtsTableSQL = (db: OpfsDatabase) => {
   }
 };
 
+const createConversationMetadataTableSQL = (db: OpfsDatabase) => {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS conversation_metadata (
+        conversationId TEXT PRIMARY KEY,
+        lastMessagesUpdateAt INTEGER NOT NULL,
+        messageCount INTEGER DEFAULT 0,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+    `);
+
+    // Create index for better query performance
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_conversation_metadata_last_update 
+      ON conversation_metadata(lastMessagesUpdateAt);
+    `);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_conversation_metadata_updated_at 
+      ON conversation_metadata(updatedAt);
+    `);
+  } catch (error) {
+    console.error("Failed to create conversation_metadata table:", error);
+    throw error;
+  }
+};
+
 const checkTableExists = (db: OpfsDatabase) => {
   try {
     db.exec("DROP TABLE IF EXISTS fts_index_global");
+    db.exec("DROP TABLE IF EXISTS conversation_metadata");
   } catch (error) {
     console.warn("Could not drop existing tables:", error);
   }
@@ -48,6 +77,7 @@ const initDb = async () => {
   db = new sqlite3.oo1.OpfsDb("/mydb.sqlite3");
   checkTableExists(db);
   createFtsTableSQL(db);
+  createConversationMetadataTableSQL(db);
 };
 
 const postMessageHandler = async (

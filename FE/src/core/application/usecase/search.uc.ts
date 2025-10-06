@@ -66,39 +66,6 @@ export const indexMessage = withErrorHandling(
   "indexMessage"
 );
 
-export const updateMessageInIndex = withErrorHandling(
-  async (
-    searchRepo: ISearchRepository,
-    messageId: TID,
-    content: string,
-    senderName: string,
-    senderId?: TID
-  ): Promise<void> => {
-    assertExists(searchRepo, "searchRepo is required");
-    assertExists(messageId, "messageId is required");
-    assertExists(content, "content is required");
-    assertExists(senderName, "senderName is required");
-
-    return searchRepo.updateMessageInIndex(
-      messageId,
-      content,
-      senderName,
-      senderId
-    );
-  },
-  "updateMessageInIndex"
-);
-
-export const removeMessageFromIndex = withErrorHandling(
-  async (searchRepo: ISearchRepository, messageId: TID): Promise<void> => {
-    assertExists(searchRepo, "searchRepo is required");
-    assertExists(messageId, "messageId is required");
-
-    return searchRepo.removeMessageFromIndex(messageId);
-  },
-  "removeMessageFromIndex"
-);
-
 export const bulkIndexMessages = withErrorHandling(
   async (
     searchRepo: ISearchRepository,

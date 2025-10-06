@@ -249,6 +249,8 @@ export const prefixSearchAndGetRawData = async (
   try {
     const indexResults = await prefixSearch(searchRepo, query, rank);
 
+    console.log("Prefix search index results:", indexResults);
+
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,

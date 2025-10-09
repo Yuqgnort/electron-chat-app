@@ -28,6 +28,7 @@ export interface ISearchRepository {
   // Query operations
   isMessageIndexed(messageId: TID): Promise<boolean>;
   getIndexedMessageIds(): Promise<TID[]>;
+  getIndexedMessageCount(): Promise<number>;
 
   // User-related queries
   getIndexedUserIds(): Promise<TID[]>;

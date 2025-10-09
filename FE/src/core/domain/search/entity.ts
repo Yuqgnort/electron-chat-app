@@ -28,6 +28,11 @@ export interface ISearchQuery {
   type: ESearchType;
   startDate?: string;
   endDate?: string;
+  cursor?: {
+    lastRank: number;
+    lastCreatedAt: number;
+    searchStartTime?: number; // ✅ Thêm để đảm bảo consistent ranking
+  };
 }
 
 export interface ISearchRawResultItem extends IMsgEntity {
@@ -44,6 +49,10 @@ export type ISearchRawResult = {
   executionTime?: number;
   query: string;
   searchType: ESearchType;
+  nextCursor?: {
+    lastRank: number;
+    lastCreatedAt: number;
+  };
 };
 
 export interface ISearchIndexItem {
@@ -64,6 +73,10 @@ export interface ISearchIndexResult {
   hasMore: boolean;
   searchType: ESearchType;
   executionTime?: number;
+  nextCursor?: {
+    lastRank: number;
+    lastCreatedAt: number;
+  };
 }
 
 export interface IMessageIndexData {
@@ -125,7 +138,11 @@ export const createSearchRawResult = (
   query: string,
   searchType: ESearchType,
   hasMore: boolean = false,
-  executionTime?: number
+  executionTime?: number,
+  nextCursor?: {
+    lastRank: number;
+    lastCreatedAt: number;
+  }
 ): ISearchRawResult => {
   return {
     items,
@@ -134,6 +151,7 @@ export const createSearchRawResult = (
     hasMore,
     searchType,
     executionTime,
+    nextCursor,
   };
 };
 
@@ -142,7 +160,11 @@ export const createSearchIndexResult = (
   query: string,
   searchType: ESearchType,
   hasMore: boolean = false,
-  executionTime?: number
+  executionTime?: number,
+  nextCursor?: {
+    lastRank: number;
+    lastCreatedAt: number;
+  }
 ): ISearchIndexResult => {
   return {
     items,
@@ -151,6 +173,7 @@ export const createSearchIndexResult = (
     hasMore,
     searchType,
     executionTime,
+    nextCursor,
   };
 };
 

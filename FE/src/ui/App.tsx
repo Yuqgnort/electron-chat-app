@@ -22,23 +22,25 @@ import {
   INFINITE_SEARCH_QUERY_KEY,
 } from "./hooks/useInfiniteSearchMessages";
 
-const mockCreate100Messages = async (
+import { topic3 } from "@/test/messages";
+
+const mock1 = topic3 as string[];
+
+const mockCreateMessages = async (
   service: any,
   convId: string,
   userIds: string[]
 ) => {
-  for (let i = 46; i < 100; i++) {
+  for (let i = 0; i < mock1.length; i++) {
     try {
       await service.msg.sendMessage({
-        content: `Message ${i + 1} from User ${userIds[0]} to User ${userIds[1]}`,
+        content: `Message ${i + 1}: ${mock1[i]}`,
         conversationId: convId,
         senderId: userIds[0],
         receiverId: userIds[1],
         serverId: null,
         status: EMsgStatus.PENDING,
       });
-
-      // Add a small delay to prevent race conditions
       await new Promise((resolve) => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`Failed to send message ${i + 1}:`, error);
@@ -90,7 +92,7 @@ export function App() {
       return;
     try {
       const conversationId = await ensureConversationId();
-      // await mockCreate100Messages(service, conversationId, [
+      // await mockCreateMessages(service, conversationId, [
       //   currentUser.id,
       //   chatBoxState.receiverUser.id,
       // ]);

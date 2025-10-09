@@ -62,7 +62,11 @@ const createConversationMetadataTableSQL = (db: OpfsDatabase) => {
       );
     `);
 
-    // Create index for better query performance
+    db.exec(`
+     CREATE INDEX IF NOT EXISTS idx_conversation_metadata_conversationId
+     ON conversation_metadata(conversationId);
+    `);
+
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_conversation_metadata_last_update 
       ON conversation_metadata(lastMessagesUpdateAt);

@@ -105,8 +105,11 @@ export const buildConversationMetadataJoinSQL = (): string => {
 /**
  * Build the SELECT clause with ranking score
  */
-export const buildRankingSelectSQL = (ranking: TRankingColection): string => {
-  const rankingSQL = buildRankingSQL(ranking);
+export const buildRankingSelectSQL = (
+  ranking: TRankingColection,
+  currentTime?: number
+): string => {
+  const rankingSQL = buildRankingSQL(ranking, currentTime);
   return `f.messageId, f.content, f.senderId, f.conversationId, f.createdAt, f.receiverId,
           ${rankingSQL} as rank, '' as highlight`;
 };

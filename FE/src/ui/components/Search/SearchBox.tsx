@@ -51,7 +51,6 @@ const SearchItem = memo(function SearchItem({
 }: SearchItemProps) {
   return (
     <div
-      key={`${msg.id}-${msg.conversationId}`}
       onClick={() => handleClickMessage(msg, searchParams.query)}
       className="p-4 hover:bg-blue-100 cursor-pointer transition-colors"
     >
@@ -111,7 +110,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Scroll maintenance refs
   const lastScrollTop = useRef(0);
   const previousScrollHeight = useRef(0);
   const shouldMaintainScroll = useRef(false);
@@ -127,6 +125,8 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     query: debouncedSearchParams,
   });
 
+  console.log("fuzzyResults", fuzzyResults);
+
   const {
     data: exactPhraseResults,
     isFetching: isFetchingExact,
@@ -137,6 +137,8 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   } = useInfiniteSearchExactPhraseQuery({
     query: debouncedSearchParams,
   });
+
+  console.log("exactPhraseResults", exactPhraseResults);
 
   const isExactPhrase = debouncedSearchParams.type === ESearchType.EXACT_PHRASE;
 
@@ -174,18 +176,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     lastScrollTop.current = scrollTop;
   };
 
-  useEffect(() => {
-    if (shouldMaintainScroll.current && scrollRef.current) {
-      const currentScrollHeight = scrollRef.current.scrollHeight;
-      const scrollDiff = currentScrollHeight - previousScrollHeight.current;
-      if (scrollDiff > 0) {
-        scrollRef.current.scrollTop = lastScrollTop.current + scrollDiff;
-      }
-      shouldMaintainScroll.current = false;
-      previousScrollHeight.current = 0;
-    }
-  }, [exactPhraseResults, fuzzyResults]);
-
   const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
     onMessageClick?.(result, tempt);
   };
@@ -194,14 +184,14 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  useEffect(() => {
-    queryClient.invalidateQueries({
-      queryKey: [INFINITE_SEARCH_QUERY_KEY],
-    });
-    queryClient.invalidateQueries({
-      queryKey: [INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY],
-    });
-  }, [debouncedSearchParams.query, queryClient]);
+  // useEffect(() => {
+  //   queryClient.invalidateQueries({
+  //     queryKey: [INFINITE_SEARCH_QUERY_KEY],
+  //   });
+  //   queryClient.invalidateQueries({
+  //     queryKey: [INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY],
+  //   });
+  // }, [debouncedSearchParams.query, queryClient]);
 
   if (!isOpen || !currentUser) return null;
 
@@ -303,7 +293,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
               <div className="divide-y">
                 {activeResults.map((msg: ISearchRawResultItem) => (
                   <SearchItem
-                    key={`${msg.id}-${msg.conversationId}`}
+                    key={msg.id + msg.localId}
                     msg={msg}
                     handleClickMessage={handleClickMessage}
                     searchParams={searchParams}

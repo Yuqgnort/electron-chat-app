@@ -1,25 +1,24 @@
 import {
-  ISearchQuery,
-  ISearchIndexResult,
-  ISearchIndexItem,
-  IMessageIndexData,
-  ESearchType,
   createSearchIndexResult,
+  ESearchType,
+  IMessageIndexData,
+  ISearchIndexItem,
+  ISearchIndexResult,
+  ISearchQuery,
   TRankingColection,
 } from "@/core/domain/search/entity";
 import { ISearchRepository } from "@/core/domain/search/repo";
 import { TID } from "@/core/domain/type";
-import { SQLiteWorkerDB } from "../init";
 import {
-  sanitizeString,
   mapSQLiteRows,
   parseTimestamp,
+  sanitizeString,
   validateRequiredFields,
 } from "../helper";
+import { SQLiteWorkerDB } from "../init";
 import {
-  buildRankingSelectSQL,
   buildConversationMetadataJoinSQL,
-  buildRankingOrderBySQL,
+  buildRankingSelectSQL,
   ensureRankingConfiguration,
   validateRankingConfiguration,
 } from "../ranking-helper";
@@ -81,8 +80,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
   const performFullTextSearch = async (
     query: ISearchQuery,
-    ranking: TRankingColection
-  ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
+    ranking: TRankingColection,
+    searchStartTime?: number
+  ): Promise<{
+    items: ISearchIndexItem[];
+    hasMore: boolean;
+    nextCursor?: { lastRank: number; lastCreatedAt: number };
+  }> => {
     const sanitize = sanitizeString(query.query);
 
     if (!sanitize) {
@@ -96,11 +100,14 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       console.warn("Invalid ranking configuration, using default ranking");
     }
 
+    const currentTime = searchStartTime || Date.now();
+
     let sql = `
-      SELECT ${buildRankingSelectSQL(validatedRanking)}
-      FROM fts_index_global f
-      ${buildConversationMetadataJoinSQL()}
-      WHERE f.fts_index_global MATCH '${buildPhraseSearch(sanitize)}'
+      WITH ranked_results AS (
+        SELECT ${buildRankingSelectSQL(validatedRanking, currentTime)}
+        FROM fts_index_global f
+        ${buildConversationMetadataJoinSQL()}
+        WHERE f.fts_index_global MATCH '${buildPhraseSearch(sanitize)}'
     `;
 
     if (query.conversationId) {
@@ -109,11 +116,27 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     sql += buildUserFilterClause(query);
     sql += buildDateFilterClause(query);
-    sql += ` ORDER BY ${buildRankingOrderBySQL(validatedRanking, "f.createdAt DESC")} LIMIT ${limit + 1}`; // Fetch one extra to check hasMore
 
-    if (query.offset && query.offset > 0) {
-      sql += ` OFFSET ${query.offset}`;
+    sql += `
+      )
+      SELECT * FROM ranked_results
+    `;
+
+    if (
+      query.cursor &&
+      query.cursor.lastRank !== undefined &&
+      query.cursor.lastCreatedAt !== undefined
+    ) {
+      const { lastRank, lastCreatedAt } = query.cursor;
+      sql += `
+        WHERE (
+          rank < ${lastRank}
+          OR (rank = ${lastRank} AND createdAt < ${lastCreatedAt})
+        )
+      `;
     }
+
+    sql += ` ORDER BY rank DESC, createdAt DESC, messageId DESC LIMIT ${limit + 1}`;
 
     console.log("Final SQL for full-text search:", sql);
 
@@ -126,13 +149,29 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     const hasMore = mappedResults.length > limit;
     const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
 
-    return { items, hasMore };
+    let nextCursor: { lastRank: number; lastCreatedAt: number } | undefined =
+      undefined;
+    if (hasMore && items.length > 0) {
+      const last = items[items.length - 1];
+
+      nextCursor = {
+        lastRank: last.rank || 0,
+        lastCreatedAt: last.createdAt,
+      };
+    }
+
+    return { items, hasMore, nextCursor };
   };
 
   const performExactPhraseSearch = async (
     query: ISearchQuery,
-    ranking: TRankingColection
-  ): Promise<{ items: ISearchIndexItem[]; hasMore: boolean }> => {
+    ranking: TRankingColection,
+    searchStartTime?: number // ← Thêm parameter để fix consistent ranking
+  ): Promise<{
+    items: ISearchIndexItem[];
+    hasMore: boolean;
+    nextCursor?: { lastRank: number; lastCreatedAt: number };
+  }> => {
     const sanitize = sanitizeString(query.query);
 
     if (!sanitize) {
@@ -146,11 +185,14 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       console.warn("Invalid ranking configuration, using default ranking");
     }
 
+    const currentTime = searchStartTime || Date.now();
+
     let sql = `
-      SELECT ${buildRankingSelectSQL(validatedRanking)}
-      FROM fts_index_global f
-      ${buildConversationMetadataJoinSQL()}
-      WHERE f.fts_index_global MATCH '"${sanitizeString(query.query)}"'
+      WITH ranked_results AS (
+        SELECT ${buildRankingSelectSQL(validatedRanking, currentTime)}
+        FROM fts_index_global f
+        ${buildConversationMetadataJoinSQL()}
+        WHERE f.content LIKE '%${sanitizeString(query.query)}%'
     `;
 
     if (query.conversationId) {
@@ -159,15 +201,30 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     sql += buildUserFilterClause(query);
     sql += buildDateFilterClause(query);
-    sql += ` ORDER BY ${buildRankingOrderBySQL(validatedRanking, "f.createdAt DESC")} LIMIT ${limit + 1}`; // Fetch one extra to check hasMore
 
-    if (query.offset && query.offset > 0) {
-      sql += ` OFFSET ${query.offset}`;
+    sql += `
+      )
+      SELECT * FROM ranked_results
+    `;
+
+    if (
+      query.cursor &&
+      query.cursor.lastRank !== undefined &&
+      query.cursor.lastCreatedAt !== undefined
+    ) {
+      const { lastRank, lastCreatedAt } = query.cursor;
+      sql += `
+        WHERE (
+          rank < ${lastRank}
+          OR (rank = ${lastRank} AND createdAt < ${lastCreatedAt})
+        )
+      `;
     }
 
-    console.log("Final SQL for exact phrase search:", sql);
+    sql += ` ORDER BY rank DESC, createdAt DESC, messageId DESC LIMIT ${limit + 1}`;
+
     const rawResults = await db.select(sql);
-    console.log("Raw results:", rawResults);
+
     const mappedResults = mapSQLiteRows(
       rawResults as any[],
       mapToSearchIndexItem
@@ -176,7 +233,17 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     const hasMore = mappedResults.length > limit;
     const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
 
-    return { items, hasMore };
+    let nextCursor: { lastRank: number; lastCreatedAt: number } | undefined =
+      undefined;
+    if (hasMore && items.length > 0) {
+      const last = items[items.length - 1];
+      nextCursor = {
+        lastRank: last.rank || 0,
+        lastCreatedAt: last.createdAt,
+      };
+    }
+
+    return { items, hasMore, nextCursor };
   };
 
   return {
@@ -184,35 +251,80 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       await db.init();
     },
 
+    async getIndexedMessageCount(): Promise<number> {
+      try {
+        const result = (await db.select(
+          `SELECT COUNT(*) as count FROM fts_index_global`
+        )) as any[];
+        return result && result.length > 0 ? result[0].count : 0;
+      } catch (error) {
+        console.warn(
+          "Failed to get indexed message count, table might not exist:",
+          error
+        );
+        return 0;
+      }
+    },
+
     async search(
       query: ISearchQuery,
       ranking: TRankingColection
     ): Promise<ISearchIndexResult> {
       const startTime = Date.now();
-
+      const searchStartTime = query.cursor?.searchStartTime || startTime;
       try {
         validateRequiredFields(query, ["query", "type", "currentUserId"]);
-
-        let searchResult: { items: ISearchIndexItem[]; hasMore: boolean };
+        let searchResult: {
+          items: ISearchIndexItem[];
+          hasMore: boolean;
+          nextCursor?: {
+            lastRank: number;
+            lastCreatedAt: number;
+            searchStartTime?: number;
+          };
+        };
 
         switch (query.type) {
           case ESearchType.FULL_TEXT:
-            searchResult = await performFullTextSearch(query, ranking);
+            searchResult = await performFullTextSearch(
+              query,
+              ranking,
+              searchStartTime
+            );
             break;
           case ESearchType.EXACT_PHRASE:
-            searchResult = await performExactPhraseSearch(query, ranking);
+            searchResult = await performExactPhraseSearch(
+              query,
+              ranking,
+              searchStartTime
+            );
             break;
           default:
-            searchResult = await performFullTextSearch(query, ranking);
+            searchResult = await performFullTextSearch(
+              query,
+              ranking,
+              searchStartTime
+            );
         }
 
         const executionTime = Date.now() - startTime;
+
+        // ✅ Tạo nextCursor với searchStartTime để maintain consistency
+        let finalNextCursor = searchResult.nextCursor;
+        if (finalNextCursor) {
+          finalNextCursor = {
+            ...finalNextCursor,
+            searchStartTime: searchStartTime,
+          };
+        }
+
         return createSearchIndexResult(
           searchResult.items,
           query.query,
           query.type,
           searchResult.hasMore,
-          executionTime
+          executionTime,
+          finalNextCursor as any // ✅ Cast để bypass type checking tạm thời
         );
       } catch (error) {
         console.error("Search error:", error);
@@ -243,7 +355,8 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
           query.query,
           ESearchType.EXACT_PHRASE,
           results.hasMore,
-          executionTime
+          executionTime,
+          results.nextCursor
         );
       } catch (error) {
         console.error("Exact phrase search error:", error);

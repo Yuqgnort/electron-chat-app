@@ -41,19 +41,21 @@ export function useInfiniteSearchQuery({
     ],
     enabled: isEnabled,
     staleTime,
-    queryFn: async ({ pageParam = 0 }) => {
-      const searchQuery = {
+    queryFn: async ({ pageParam }) => {
+      const searchQuery: ISearchQuery = {
         ...query,
-        offset: pageParam,
+        cursor: pageParam || undefined,
       };
       const result = await service.search.prefixSearch(searchQuery);
       return result;
     },
-    getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage.hasMore) return undefined;
-      return allPages.length * (query.limit || 50);
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || !lastPage.nextCursor) return undefined;
+      return lastPage.nextCursor;
     },
-    initialPageParam: 0,
+    initialPageParam: undefined as
+      | { lastRank: number; lastCreatedAt: number }
+      | undefined,
   });
 }
 
@@ -86,18 +88,20 @@ export function useInfiniteSearchExactPhraseQuery({
     ],
     enabled: isEnabled,
     staleTime,
-    queryFn: async ({ pageParam = 0 }) => {
-      const searchQuery = {
+    queryFn: async ({ pageParam }) => {
+      const searchQuery: ISearchQuery = {
         ...query,
-        offset: pageParam,
+        cursor: pageParam || undefined,
       };
       const result = await service.search.searchExactPhrase(searchQuery);
       return result;
     },
-    getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage.hasMore) return undefined;
-      return allPages.length * (query.limit || 50);
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.hasMore || !lastPage.nextCursor) return undefined;
+      return lastPage.nextCursor;
     },
-    initialPageParam: 0,
+    initialPageParam: undefined as
+      | { lastRank: number; lastCreatedAt: number }
+      | undefined,
   });
 }

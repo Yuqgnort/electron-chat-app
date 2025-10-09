@@ -22,6 +22,10 @@ import { createUserRepoIdb } from "./infratructure/indexDB/repos/user.repo";
 import { createSocketClient } from "./infratructure/socket";
 import { SQLiteWorkerDB } from "./infratructure/sqlite/init";
 import { createSearchRepoSQLite } from "./infratructure/sqlite/repos";
+import {
+  startupHealthCheckHandler,
+  periodicHealthCheckHandler,
+} from "./core/application/handler/health-check.hdl";
 
 /////////////////////////
 
@@ -105,7 +109,13 @@ export async function bootstrap() {
   );
   retrySendingPendingMessagesHandler(pendingMsgRepo, eventBus, socket);
   autoIndexMessageHandler(eventBus, searchRepo);
-  indexExistingMessages(msgRepo, searchRepo);
+
+  // Handler 1: Startup Health Check & Rebuild
+  await startupHealthCheckHandler(msgRepo, searchRepo);
+
+  // Handler 2: Periodic Health Check & Rebuild (every 30 minutes)
+  const periodicHealthCheck = periodicHealthCheckHandler(msgRepo, searchRepo);
+  periodicHealthCheck.start();
 
   const service = createAppService(
     {
@@ -120,6 +130,25 @@ export async function bootstrap() {
     transactionManager,
     socket
   );
+
+  // Cleanup function for graceful shutdown
+  const cleanup = () => {
+    console.log("🧹 Cleaning up periodic health check...");
+    periodicHealthCheck.stop();
+  };
+
+  // Register cleanup handlers (only in Node.js environment)
+  if (typeof process !== "undefined" && process.on) {
+    process.on("SIGINT", cleanup);
+    process.on("SIGTERM", cleanup);
+    process.on("beforeExit", cleanup);
+  }
+
+  // For browser/renderer environment - cleanup on window unload
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", cleanup);
+    window.addEventListener("unload", cleanup);
+  }
 
   return {
     service: {
@@ -142,6 +171,10 @@ export async function bootstrap() {
       searchRepo,
     },
     sqliteDb,
+    healthCheck: {
+      start: () => periodicHealthCheck.start(),
+      stop: () => periodicHealthCheck.stop(),
+    },
   };
 }
 

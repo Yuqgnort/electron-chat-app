@@ -5,16 +5,8 @@ export enum ESearchType {
   FULL_TEXT = "full_text",
   EXACT_PHRASE = "exact_phrase",
 }
-
-export type TRankingColection = {
-  recencyBoost: {
-    weight?: number;
-    calFunction?: (createdAt: TTimeStamp) => number;
-  };
-  conversationActivityBoost: {
-    weight?: number;
-    calFunction?: (lastMessagesUpdateAt: TTimeStamp) => number;
-  };
+export type TCursor = {
+  rowid: number;
 };
 
 export interface ISearchQuery {
@@ -28,17 +20,23 @@ export interface ISearchQuery {
   type: ESearchType;
   startDate?: string;
   endDate?: string;
-  cursor?: {
-    lastRank: number;
-    lastCreatedAt: number;
-    searchStartTime?: number; // ✅ Thêm để đảm bảo consistent ranking
-  };
+  cursor?: TCursor;
 }
+
+export type TRankingColection = {
+  recencyBoost: {
+    weight?: number;
+    calFunction?: (createdAt: TTimeStamp) => number;
+  };
+  conversationActivityBoost: {
+    weight?: number;
+    calFunction?: (lastMessagesUpdateAt: TTimeStamp) => number;
+  };
+};
 
 export interface ISearchRawResultItem extends IMsgEntity {
   receiverName: string;
   senderName: string;
-  rank?: number;
   highlight?: string;
 }
 
@@ -49,10 +47,7 @@ export type ISearchRawResult = {
   executionTime?: number;
   query: string;
   searchType: ESearchType;
-  nextCursor?: {
-    lastRank: number;
-    lastCreatedAt: number;
-  };
+  nextCursor?: TCursor;
 };
 
 export interface ISearchIndexItem {
@@ -61,9 +56,9 @@ export interface ISearchIndexItem {
   senderId: TID;
   conversationId: TID;
   createdAt: TTimeStamp;
-  rank?: number;
   highlight?: string;
   receiverId: TID;
+  rowid?: number;
 }
 
 export interface ISearchIndexResult {
@@ -73,10 +68,7 @@ export interface ISearchIndexResult {
   hasMore: boolean;
   searchType: ESearchType;
   executionTime?: number;
-  nextCursor?: {
-    lastRank: number;
-    lastCreatedAt: number;
-  };
+  nextCursor?: TCursor;
 }
 
 export interface IMessageIndexData {
@@ -111,7 +103,6 @@ export const createSearchRawItem = ({
   senderId,
   senderName,
   receiverId,
-  rank,
   highlight,
 }: {
   msg: IMsgEntity;
@@ -119,13 +110,11 @@ export const createSearchRawItem = ({
   senderId: TID;
   senderName: string;
   receiverId: TID;
-  rank?: number;
   highlight?: string;
 }): ISearchRawResultItem => {
   return {
     ...msg,
     receiverName,
-    rank,
     highlight,
     senderId,
     senderName,
@@ -139,10 +128,7 @@ export const createSearchRawResult = (
   searchType: ESearchType,
   hasMore: boolean = false,
   executionTime?: number,
-  nextCursor?: {
-    lastRank: number;
-    lastCreatedAt: number;
-  }
+  nextCursor?: TCursor
 ): ISearchRawResult => {
   return {
     items,
@@ -161,10 +147,7 @@ export const createSearchIndexResult = (
   searchType: ESearchType,
   hasMore: boolean = false,
   executionTime?: number,
-  nextCursor?: {
-    lastRank: number;
-    lastCreatedAt: number;
-  }
+  nextCursor?: TCursor
 ): ISearchIndexResult => {
   return {
     items,

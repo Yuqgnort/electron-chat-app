@@ -1,4 +1,8 @@
-import { ESearchType, ISearchQuery } from "@/core/domain/search/entity";
+import {
+  ESearchType,
+  ISearchQuery,
+  ISearchRawResult,
+} from "@/core/domain/search/entity";
 import { useAppContext } from "@/ui/context";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
@@ -41,21 +45,20 @@ export function useInfiniteSearchQuery({
     ],
     enabled: isEnabled,
     staleTime,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam }: { pageParam?: { rowid: number } }) => {
       const searchQuery: ISearchQuery = {
         ...query,
-        cursor: pageParam || undefined,
+        cursor: pageParam,
       };
       const result = await service.search.prefixSearch(searchQuery);
       return result;
     },
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: (lastPage: ISearchRawResult) => {
       if (!lastPage.hasMore || !lastPage.nextCursor) return undefined;
       return lastPage.nextCursor;
     },
-    initialPageParam: undefined as
-      | { lastRank: number; lastCreatedAt: number }
-      | undefined,
+
+    initialPageParam: undefined,
   });
 }
 
@@ -88,20 +91,18 @@ export function useInfiniteSearchExactPhraseQuery({
     ],
     enabled: isEnabled,
     staleTime,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam }: { pageParam?: { rowid: number } }) => {
       const searchQuery: ISearchQuery = {
         ...query,
-        cursor: pageParam || undefined,
+        cursor: pageParam,
       };
       const result = await service.search.searchExactPhrase(searchQuery);
       return result;
     },
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: (lastPage: ISearchRawResult) => {
       if (!lastPage.hasMore || !lastPage.nextCursor) return undefined;
       return lastPage.nextCursor;
     },
-    initialPageParam: undefined as
-      | { lastRank: number; lastCreatedAt: number }
-      | undefined,
+    initialPageParam: undefined,
   });
 }

@@ -5,7 +5,7 @@ import {
   ISearchIndexItem,
   ISearchIndexResult,
   ISearchQuery,
-  TRankingColection,
+  TCursor,
 } from "@/core/domain/search/entity";
 import { ISearchRepository } from "@/core/domain/search/repo";
 import { TID } from "@/core/domain/type";
@@ -16,76 +16,119 @@ import {
   validateRequiredFields,
 } from "../helper";
 import { SQLiteWorkerDB } from "../init";
-import {
-  buildConversationMetadataJoinSQL,
-  buildRankingSelectSQL,
-  ensureRankingConfiguration,
-  validateRankingConfiguration,
-} from "../ranking-helper";
+
+const mapToSearchIndexItem = (row: any): ISearchIndexItem => ({
+  messageId: row.messageId,
+  content: row.content,
+  senderId: row.senderId,
+  receiverId: row.receiverId,
+  conversationId: row.conversationId,
+  createdAt: parseTimestamp(row.createdAt),
+  highlight: row.highlight,
+  rowid: row.rowid,
+});
+
+const buildUserFilterClause = (query: ISearchQuery): string => {
+  let clause = "";
+  if (query.userId) {
+    clause += ` AND f.senderId = '${sanitizeString(query.userId)}'`;
+  }
+  return clause;
+};
+
+const buildDateFilterClause = (query: ISearchQuery): string => {
+  let clause = "";
+  if (query.startDate && query.endDate) {
+    const startTimestamp = new Date(query.startDate).getTime();
+    const endTimestamp =
+      new Date(query.endDate).getTime() + (24 * 60 * 60 * 1000 - 1);
+    clause += ` AND CAST(f.createdAt AS INTEGER) >= ${startTimestamp} AND CAST(f.createdAt AS INTEGER) <= ${endTimestamp}`;
+  } else if (query.startDate) {
+    const startTimestamp = new Date(query.startDate).getTime();
+    clause += ` AND CAST(f.createdAt AS INTEGER) >= ${startTimestamp}`;
+  } else if (query.endDate) {
+    const endTimestamp =
+      new Date(query.endDate).getTime() + (24 * 60 * 60 * 1000 - 1);
+    clause += ` AND CAST(f.createdAt AS INTEGER) <= ${endTimestamp}`;
+  }
+  return clause;
+};
+
+const buildInitPrefixQuery = (string: string): string => {
+  return `
+         SELECT f.*, f.rowid
+         FROM fts_index_global f
+         WHERE fts_index_global MATCH '${string}'
+  `;
+};
+
+const buildPrefixPhraseSearch = (query: string) => {
+  const tokens = query.trim().split(/\s+/);
+  if (tokens.length === 1) {
+    return `${tokens[0]}*`;
+  } else {
+    return `"${query}"*`;
+  }
+};
+
+const buildExactPhraseSearch = (query: string) => {
+  return `"${query}"`;
+};
+
+const buildCursorClause = (cursor?: { rowid: number }): string => {
+  if (cursor && cursor.rowid !== undefined) {
+    return `
+      AND rowid < ${cursor.rowid}
+    `;
+  }
+  return "";
+};
+
+const buildOrderByClause = (type: ESearchType): string => {
+  switch (type) {
+    case ESearchType.FULL_TEXT:
+      return `ORDER BY rowid DESC`;
+    case ESearchType.EXACT_PHRASE:
+      return `ORDER BY rowid DESC`;
+    default:
+      return `ORDER BY rowid DESC`;
+  }
+};
+
+const buildLimitClause = (limit: number): string => {
+  return `
+     LIMIT ${limit}
+  `;
+};
+
+//////////////////////
+
+const createTempCacheTableForNextScroll = async (db: SQLiteWorkerDB) => {
+  const createTableSQL = `
+    CREATE TEMP TABLE IF NOT EXISTS temp_search_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      messageId TEXT UNIQUE,
+      content TEXT,
+      senderId TEXT,
+      receiverId TEXT,
+      conversationId TEXT,
+      createdAt INTEGER
+    )
+  `;
+  await db.exec(createTableSQL);
+};
+
+//////////////////////
 
 export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
-  const mapToSearchIndexItem = (row: any): ISearchIndexItem => ({
-    messageId: row.messageId,
-    content: row.content,
-    senderId: row.senderId,
-    receiverId: row.receiverId,
-    conversationId: row.conversationId,
-    createdAt: parseTimestamp(row.createdAt),
-    rank: row.rank,
-    highlight: row.highlight,
-  });
-
-  const buildUserFilterClause = (query: ISearchQuery): string => {
-    let clause = "";
-
-    if (query.userId) {
-      clause += ` AND f.senderId = '${sanitizeString(query.userId)}'`;
-    }
-
-    return clause;
-  };
-
-  const buildDateFilterClause = (query: ISearchQuery): string => {
-    let clause = "";
-
-    // Filter by date range
-    if (query.startDate && query.endDate) {
-      // Convert dates to timestamps for comparison
-      const startTimestamp = new Date(query.startDate).getTime();
-      const endTimestamp =
-        new Date(query.endDate).getTime() + (24 * 60 * 60 * 1000 - 1); // End of day
-
-      // Cast createdAt to numeric for comparison since it might be stored as string
-      clause += ` AND CAST(f.createdAt AS INTEGER) >= ${startTimestamp} AND CAST(f.createdAt AS INTEGER) <= ${endTimestamp}`;
-    } else if (query.startDate) {
-      const startTimestamp = new Date(query.startDate).getTime();
-      clause += ` AND CAST(f.createdAt AS INTEGER) >= ${startTimestamp}`;
-    } else if (query.endDate) {
-      const endTimestamp =
-        new Date(query.endDate).getTime() + (24 * 60 * 60 * 1000 - 1); // End of day
-      clause += ` AND CAST(f.createdAt AS INTEGER) <= ${endTimestamp}`;
-    }
-
-    return clause;
-  };
-
-  function buildPhraseSearch(query: string) {
-    const tokens = query.trim().split(/\s+/);
-    if (tokens.length === 1) {
-      return `${tokens[0]}*`;
-    } else {
-      return `"${query}"*`;
-    }
-  }
+  ///////////////////
 
   const performFullTextSearch = async (
-    query: ISearchQuery,
-    ranking: TRankingColection,
-    searchStartTime?: number
+    query: ISearchQuery
   ): Promise<{
     items: ISearchIndexItem[];
     hasMore: boolean;
-    nextCursor?: { lastRank: number; lastCreatedAt: number };
+    nextCursor?: TCursor;
   }> => {
     const sanitize = sanitizeString(query.query);
 
@@ -93,54 +136,22 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       return { items: [], hasMore: false };
     }
 
-    const limit = query.limit || 50;
-    const validatedRanking = ensureRankingConfiguration(ranking);
+    const limit = query.limit || 100;
 
-    if (!validateRankingConfiguration(validatedRanking)) {
-      console.warn("Invalid ranking configuration, using default ranking");
-    }
-
-    const currentTime = searchStartTime || Date.now();
-
-    let sql = `
-      WITH ranked_results AS (
-        SELECT ${buildRankingSelectSQL(validatedRanking, currentTime)}
-        FROM fts_index_global f
-        ${buildConversationMetadataJoinSQL()}
-        WHERE f.fts_index_global MATCH '${buildPhraseSearch(sanitize)}'
-    `;
-
-    if (query.conversationId) {
-      sql += ` AND f.conversationId = '${sanitizeString(query.conversationId)}'`;
-    }
-
+    let sql = buildInitPrefixQuery(buildPrefixPhraseSearch(sanitize));
     sql += buildUserFilterClause(query);
     sql += buildDateFilterClause(query);
-
-    sql += `
-      )
-      SELECT * FROM ranked_results
-    `;
-
-    if (
-      query.cursor &&
-      query.cursor.lastRank !== undefined &&
-      query.cursor.lastCreatedAt !== undefined
-    ) {
-      const { lastRank, lastCreatedAt } = query.cursor;
-      sql += `
-        WHERE (
-          rank < ${lastRank}
-          OR (rank = ${lastRank} AND createdAt < ${lastCreatedAt})
-        )
-      `;
+    if (query.cursor && query.cursor.rowid) {
+      sql += buildCursorClause(query.cursor);
     }
-
-    sql += ` ORDER BY rank DESC, createdAt DESC, messageId DESC LIMIT ${limit + 1}`;
+    sql += buildOrderByClause(query.type || ESearchType.FULL_TEXT);
+    sql += buildLimitClause(limit + 1);
 
     console.log("Final SQL for full-text search:", sql);
-
+    console.time("FullTextSearchExecutionTime");
     const rawResults = await db.select(sql);
+    console.timeEnd("FullTextSearchExecutionTime");
+
     const mappedResults = mapSQLiteRows(
       rawResults as any[],
       mapToSearchIndexItem
@@ -148,29 +159,19 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     const hasMore = mappedResults.length > limit;
     const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
-
-    let nextCursor: { lastRank: number; lastCreatedAt: number } | undefined =
-      undefined;
-    if (hasMore && items.length > 0) {
-      const last = items[items.length - 1];
-
-      nextCursor = {
-        lastRank: last.rank || 0,
-        lastCreatedAt: last.createdAt,
-      };
-    }
-
+    const lastItem = items[items.length - 1];
+    const nextCursor = hasMore
+      ? { rowid: lastItem.rowid as number }
+      : undefined;
     return { items, hasMore, nextCursor };
   };
 
   const performExactPhraseSearch = async (
-    query: ISearchQuery,
-    ranking: TRankingColection,
-    searchStartTime?: number // ← Thêm parameter để fix consistent ranking
+    query: ISearchQuery
   ): Promise<{
     items: ISearchIndexItem[];
     hasMore: boolean;
-    nextCursor?: { lastRank: number; lastCreatedAt: number };
+    nextCursor?: TCursor;
   }> => {
     const sanitize = sanitizeString(query.query);
 
@@ -178,52 +179,21 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       return { items: [], hasMore: false };
     }
 
-    const limit = query.limit || 50;
-    const validatedRanking = ensureRankingConfiguration(ranking);
+    const limit = query.limit || 100;
 
-    if (!validateRankingConfiguration(validatedRanking)) {
-      console.warn("Invalid ranking configuration, using default ranking");
-    }
-
-    const currentTime = searchStartTime || Date.now();
-
-    let sql = `
-      WITH ranked_results AS (
-        SELECT ${buildRankingSelectSQL(validatedRanking, currentTime)}
-        FROM fts_index_global f
-        ${buildConversationMetadataJoinSQL()}
-        WHERE f.content LIKE '%${sanitizeString(query.query)}%'
-    `;
-
-    if (query.conversationId) {
-      sql += ` AND f.conversationId = '${sanitizeString(query.conversationId)}'`;
-    }
-
+    let sql = buildInitPrefixQuery(buildExactPhraseSearch(sanitize));
     sql += buildUserFilterClause(query);
     sql += buildDateFilterClause(query);
-
-    sql += `
-      )
-      SELECT * FROM ranked_results
-    `;
-
-    if (
-      query.cursor &&
-      query.cursor.lastRank !== undefined &&
-      query.cursor.lastCreatedAt !== undefined
-    ) {
-      const { lastRank, lastCreatedAt } = query.cursor;
-      sql += `
-        WHERE (
-          rank < ${lastRank}
-          OR (rank = ${lastRank} AND createdAt < ${lastCreatedAt})
-        )
-      `;
+    if (query.cursor && query.cursor.rowid) {
+      sql += buildCursorClause(query.cursor);
     }
+    sql += buildOrderByClause(query.type || ESearchType.FULL_TEXT);
+    sql += buildLimitClause(limit + 1);
 
-    sql += ` ORDER BY rank DESC, createdAt DESC, messageId DESC LIMIT ${limit + 1}`;
-
+    console.log("Final SQL for full-text search:", sql);
+    console.time("FullTextSearchExecutionTime");
     const rawResults = await db.select(sql);
+    console.timeEnd("FullTextSearchExecutionTime");
 
     const mappedResults = mapSQLiteRows(
       rawResults as any[],
@@ -232,17 +202,10 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
     const hasMore = mappedResults.length > limit;
     const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
-
-    let nextCursor: { lastRank: number; lastCreatedAt: number } | undefined =
-      undefined;
-    if (hasMore && items.length > 0) {
-      const last = items[items.length - 1];
-      nextCursor = {
-        lastRank: last.rank || 0,
-        lastCreatedAt: last.createdAt,
-      };
-    }
-
+    const lastItem = items[items.length - 1];
+    const nextCursor = hasMore
+      ? { rowid: lastItem.rowid as number }
+      : undefined;
     return { items, hasMore, nextCursor };
   };
 
@@ -266,55 +229,36 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       }
     },
 
-    async search(
-      query: ISearchQuery,
-      ranking: TRankingColection
-    ): Promise<ISearchIndexResult> {
+    async search(query: ISearchQuery): Promise<ISearchIndexResult> {
       const startTime = Date.now();
-      const searchStartTime = query.cursor?.searchStartTime || startTime;
+
       try {
         validateRequiredFields(query, ["query", "type", "currentUserId"]);
         let searchResult: {
           items: ISearchIndexItem[];
           hasMore: boolean;
           nextCursor?: {
-            lastRank: number;
-            lastCreatedAt: number;
-            searchStartTime?: number;
+            rowid: number;
           };
         };
 
         switch (query.type) {
           case ESearchType.FULL_TEXT:
-            searchResult = await performFullTextSearch(
-              query,
-              ranking,
-              searchStartTime
-            );
+            searchResult = await performFullTextSearch(query);
             break;
           case ESearchType.EXACT_PHRASE:
-            searchResult = await performExactPhraseSearch(
-              query,
-              ranking,
-              searchStartTime
-            );
+            searchResult = await performExactPhraseSearch(query);
             break;
           default:
-            searchResult = await performFullTextSearch(
-              query,
-              ranking,
-              searchStartTime
-            );
+            searchResult = await performFullTextSearch(query);
         }
 
         const executionTime = Date.now() - startTime;
 
-        // ✅ Tạo nextCursor với searchStartTime để maintain consistency
         let finalNextCursor = searchResult.nextCursor;
         if (finalNextCursor) {
           finalNextCursor = {
             ...finalNextCursor,
-            searchStartTime: searchStartTime,
           };
         }
 
@@ -338,16 +282,13 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       }
     },
 
-    async searchExactPhrase(
-      query: ISearchQuery,
-      ranking: TRankingColection
-    ): Promise<ISearchIndexResult> {
+    async searchExactPhrase(query: ISearchQuery): Promise<ISearchIndexResult> {
       const startTime = Date.now();
 
       try {
         validateRequiredFields(query, ["query", "currentUserId"]);
 
-        const results = await performExactPhraseSearch(query, ranking);
+        const results = await performExactPhraseSearch(query);
         const executionTime = Date.now() - startTime;
 
         return createSearchIndexResult(

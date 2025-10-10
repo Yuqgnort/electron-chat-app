@@ -3,7 +3,7 @@ import { IConvRepo } from "../domain/conv/repo";
 import { IMsgEntity, TMsgDirection } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
-import { TRankingColection } from "../domain/search/entity";
+
 import { ISearchRepository } from "../domain/search/repo";
 import { IUserEntity } from "../domain/user/entity";
 import { IUserRepo } from "../domain/user/repo";
@@ -193,33 +193,25 @@ export function createAppService(
     },
     search: {
       prefixSearch: withErrorHandling(
-        async (
-          query: Parameters<typeof prefixSearchAndGetRawData>[4],
-          rank?: TRankingColection
-        ) => {
+        async (query: Parameters<typeof prefixSearchAndGetRawData>[4]) => {
           return await prefixSearchAndGetRawData(
             repos.searchRepo,
             repos.msgRepo,
             repos.userRepo,
             transactionManager,
-            query,
-            rank
+            query
           );
         },
         "prefixSearch"
       ),
       searchExactPhrase: withErrorHandling(
-        async (
-          query: Parameters<typeof prefixSearchAndGetRawData>[4],
-          rank?: TRankingColection
-        ) =>
+        async (query: Parameters<typeof prefixSearchAndGetRawData>[4]) =>
           await exactPhraseSearchAndGetRawData(
             repos.searchRepo,
             repos.msgRepo,
             repos.userRepo,
             transactionManager,
-            query,
-            rank
+            query
           ),
         "searchExactPhrase"
       ),

@@ -22,9 +22,6 @@ export function MessageInput({
 }: MessageInputProps) {
   const [message, setMessage] = useState("");
 
-  const { chatBoxState } = useChatWindowStore();
-  const { currentUser } = useCurrentUserStore();
-
   const { handleInputChange } = useSimpleTyping({
     receiverUserId: userId,
     typingTimeout: 2000,

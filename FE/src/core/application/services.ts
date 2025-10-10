@@ -10,7 +10,6 @@ import {
   ISearchIndexItem,
   ISearchQuery,
   ISearchRawResultItem,
-  TRankingColection,
 } from "../domain/search/entity";
 import { ISearchRepository } from "../domain/search/repo";
 import { IUserEntity } from "../domain/user/entity";
@@ -241,60 +240,36 @@ export const prefixSearchAndGetRawData = async (
   msgRepo: IMsgRepo,
   userRepo: IUserRepo,
   transactionManager: ITransactionManager,
-  query: ISearchQuery,
-  rank?: TRankingColection
+  query: ISearchQuery
 ) => {
-  const startTime = performance.now();
-
-  const logStep = (label: string, start: number) => {
-    const duration = (performance.now() - start).toFixed(2);
-
-    if (typeof performance !== "undefined" && (performance as any).memory) {
-      const mem = (performance as any).memory;
-    }
-
-    console.table([
-      {
-        Step: label,
-        "Duration (ms)": duration,
-      },
-    ]);
-  };
+  const startTime = Date.now();
 
   try {
-    const t1 = performance.now();
-    const indexResults = await prefixSearch(searchRepo, query, rank);
-    logStep("prefixSearch", t1);
+    const indexResults = await prefixSearch(searchRepo, query);
 
-    const t2 = performance.now();
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
       indexResults.items,
       transactionManager
     );
-    logStep("enrichSearchResultsWithRawData", t2);
-
-    logStep("Total Execution", startTime);
 
     return createSearchRawResult(
       enrichedItems,
       query.query,
       query.type,
       indexResults.hasMore,
-      performance.now() - startTime,
+      Date.now() - startTime,
       indexResults.nextCursor
     );
   } catch (error) {
     console.error("Enhanced search error:", error);
-    logStep("Error Handling", startTime);
-
     return createSearchRawResult(
       [],
       query.query,
       query.type,
       false,
-      performance.now() - startTime
+      Date.now() - startTime
     );
   }
 };
@@ -304,12 +279,11 @@ export const exactPhraseSearchAndGetRawData = async (
   msgRepo: IMsgRepo,
   userRepo: IUserRepo,
   transactionManager: ITransactionManager,
-  query: ISearchQuery,
-  rank?: TRankingColection
+  query: ISearchQuery
 ) => {
   const startTime = Date.now();
   try {
-    const indexResults = await searchExactPhrase(searchRepo, query, rank);
+    const indexResults = await searchExactPhrase(searchRepo, query);
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
@@ -355,7 +329,6 @@ export const getSearchRawResult = async (
         receiverName: receiver?.name || "unknown",
         senderId: msg.senderId,
         senderName: sender?.name || "unknown",
-        rank: searchItem.rank,
         highlight: "",
       });
       return rs;

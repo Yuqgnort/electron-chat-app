@@ -106,7 +106,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
 
   const { data: users = [] } = useGetUsers(service);
 
-  const debouncedSearchParams = useDebounce(searchParams, 300);
+  const debouncedSearchParams = useDebounce(searchParams, 1000);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -125,7 +125,7 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     query: debouncedSearchParams,
   });
 
-  console.log("fuzzyResults", fuzzyResults);
+  console.log();
 
   const {
     data: exactPhraseResults,
@@ -138,13 +138,12 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     query: debouncedSearchParams,
   });
 
-  console.log("exactPhraseResults", exactPhraseResults);
-
   const isExactPhrase = debouncedSearchParams.type === ESearchType.EXACT_PHRASE;
 
   const activeResults = useMemo(() => {
-    const data = isExactPhrase ? exactPhraseResults : fuzzyResults;
-    return data?.pages.flatMap((page) => page.items) || [];
+    const results = isExactPhrase ? exactPhraseResults : fuzzyResults;
+    const items = results?.pages.flatMap((page) => page.items) || [];
+    return items;
   }, [isExactPhrase, exactPhraseResults, fuzzyResults]);
 
   const fetchError = isExactPhrase ? exactError : fuzzyError;
@@ -183,15 +182,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
-
-  // useEffect(() => {
-  //   queryClient.invalidateQueries({
-  //     queryKey: [INFINITE_SEARCH_QUERY_KEY],
-  //   });
-  //   queryClient.invalidateQueries({
-  //     queryKey: [INFINITE_SEARCH_EXACT_PHRASE_QUERY_KEY],
-  //   });
-  // }, [debouncedSearchParams.query, queryClient]);
 
   if (!isOpen || !currentUser) return null;
 
@@ -291,9 +281,9 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
               style={{ maxHeight: "calc(100% - 60px)" }}
             >
               <div className="divide-y">
-                {activeResults.map((msg: ISearchRawResultItem) => (
+                {activeResults.map((msg) => (
                   <SearchItem
-                    key={msg.id + msg.localId}
+                    key={crypto.randomUUID()}
                     msg={msg}
                     handleClickMessage={handleClickMessage}
                     searchParams={searchParams}

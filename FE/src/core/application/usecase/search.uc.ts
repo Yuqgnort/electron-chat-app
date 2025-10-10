@@ -5,8 +5,6 @@ import {
   ISearchIndexResult,
   createSearchQuery,
   isValidSearchQuery,
-  TRankingColection,
-  createRankingColection,
 } from "@/core/domain/search/entity";
 import { ISearchRepository } from "@/core/domain/search/repo";
 import { TID } from "@/core/domain/type";
@@ -17,17 +15,15 @@ import { assertExists, withErrorHandling } from "../error";
 export const prefixSearch = withErrorHandling(
   async (
     searchRepo: ISearchRepository,
-    query: ISearchQuery,
-    rank?: TRankingColection
+    query: ISearchQuery
   ): Promise<ISearchIndexResult> => {
     assertExists(searchRepo, "searchRepo is required");
     assertExists(query, "query is required");
     if (!isValidSearchQuery(query)) {
       throw new Error("Invalid search query");
     }
-    const searchRanking = createRankingColection(rank);
     const searchQuery = createSearchQuery(query);
-    return searchRepo.search(searchQuery, searchRanking);
+    return searchRepo.search(searchQuery);
   },
   "performSearch"
 );
@@ -35,20 +31,18 @@ export const prefixSearch = withErrorHandling(
 export const searchExactPhrase = withErrorHandling(
   async (
     searchRepo: ISearchRepository,
-    query: ISearchQuery,
-    rank?: TRankingColection
+    query: ISearchQuery
   ): Promise<ISearchIndexResult> => {
     assertExists(searchRepo, "searchRepo is required");
     assertExists(query, "phrase is required");
     if (!isValidSearchQuery(query)) {
       throw new Error("Invalid search query");
     }
-    const searchRanking = createRankingColection(rank);
     const searchQuery = createSearchQuery({
       ...query,
       type: ESearchType.EXACT_PHRASE,
     });
-    return searchRepo.searchExactPhrase(searchQuery, searchRanking);
+    return searchRepo.searchExactPhrase(searchQuery);
   },
   "searchExactPhrase"
 );

@@ -180,14 +180,11 @@ export function createSocketClient(
       socket.emit("typing:stop", { userId, conversationId });
     },
 
-    // Simple typing methods
     startTypingTo(receiverUserId: string): void {
       if (!socket || !socket.connected) {
         console.warn("Cannot start typing: Socket not connected");
         return;
       }
-      console.log("🔥 Emitting typing start to:", receiverUserId);
-      // Sử dụng event có sẵn với receiverUserId làm conversationId
       socket.emit("typing:start", {
         userId: currentUserId || "",
         conversationId: receiverUserId,

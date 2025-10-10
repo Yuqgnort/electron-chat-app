@@ -131,7 +131,6 @@ export async function bootstrap() {
     socket
   );
 
-  // Cleanup function for graceful shutdown
   const cleanup = () => {
     console.log("🧹 Cleaning up periodic health check...");
     periodicHealthCheck.stop();

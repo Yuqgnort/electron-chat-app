@@ -35,12 +35,9 @@ const createFtsTableSQL = (db: OpfsDatabase) => {
           content,
           createdAt UNINDEXED,
           tokenize = 'unicode61 remove_diacritics 2',
-          prefix = 1,
-          prefix = 2,
-          prefix = 3
+          prefix = '1 2 3'
         );
       `);
-      console.log("Created new FTS table");
     } else {
       console.log("FTS table already exists, preserving data");
     }
@@ -152,9 +149,7 @@ const initDb = async () => {
           content,
           createdAt UNINDEXED,
           tokenize = 'unicode61 remove_diacritics 2',
-          prefix = 1,
-          prefix = 2,
-          prefix = 3
+          prefix = '1 2 3'
         );
       `);
       console.log("FTS table recreated successfully");

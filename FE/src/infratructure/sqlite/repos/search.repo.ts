@@ -17,6 +17,69 @@ import {
 } from "../helper";
 import { SQLiteWorkerDB } from "../init";
 
+let currentKeyword = "";
+
+const escapeSQLString = (value?: string | number | null): string => {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "number") return value.toString();
+
+  return `'${String(value).replace(/'/g, "''")}'`;
+};
+
+const ensureCacheTable = async (db: SQLiteWorkerDB) => {
+  const sql = `
+    CREATE TEMP TABLE IF NOT EXISTS temp_search_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      keyword TEXT,
+      messageId TEXT UNIQUE,
+      content TEXT,
+      senderId TEXT,
+      receiverId TEXT,
+      conversationId TEXT,
+      createdAt INTEGER
+    )
+  `;
+  await db.exec(sql);
+};
+
+const buildDeleteCacheSQL = (keyword: string) => `
+  DELETE FROM temp_search_cache
+  WHERE keyword != ${escapeSQLString(keyword)};
+`;
+
+const buildInsertCacheSQL = (row: ISearchIndexItem, keyword: string) => `
+  INSERT OR IGNORE INTO temp_search_cache
+  (keyword, messageId, content, senderId, receiverId, conversationId, createdAt)
+  VALUES (
+    ${escapeSQLString(keyword)},
+    ${escapeSQLString(row.messageId)},
+    ${escapeSQLString(row.content)},
+    ${escapeSQLString(row.senderId)},
+    ${escapeSQLString(row.receiverId)},
+    ${escapeSQLString(row.conversationId)},
+    ${escapeSQLString(row.createdAt)}
+  );
+`;
+
+const buildTrimCacheSQL = (keyword: string) => `
+  DELETE FROM temp_search_cache
+  WHERE keyword = ${escapeSQLString(keyword)}
+  AND id NOT IN (
+    SELECT id FROM temp_search_cache
+    WHERE keyword = ${escapeSQLString(keyword)}
+    ORDER BY createdAt DESC
+    LIMIT 1000
+  );
+`;
+
+const buildSelectCacheSQL = (keyword: string, cursor?: number, limit = 100) => `
+  SELECT * FROM temp_search_cache
+  WHERE keyword = ${escapeSQLString(keyword)}
+  ${cursor ? `AND id < ${cursor}` : ""}
+  ORDER BY createdAt DESC
+  LIMIT ${limit + 1};
+`;
+
 const mapToSearchIndexItem = (row: any): ISearchIndexItem => ({
   messageId: row.messageId,
   content: row.content,
@@ -103,25 +166,70 @@ const buildLimitClause = (limit: number): string => {
 
 //////////////////////
 
-const createTempCacheTableForNextScroll = async (db: SQLiteWorkerDB) => {
-  const createTableSQL = `
-    CREATE TEMP TABLE IF NOT EXISTS temp_search_cache (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      messageId TEXT UNIQUE,
-      content TEXT,
-      senderId TEXT,
-      receiverId TEXT,
-      conversationId TEXT,
-      createdAt INTEGER
-    )
-  `;
-  await db.exec(createTableSQL);
-};
-
-//////////////////////
-
 export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
   ///////////////////
+
+  const performFullTextSearchCache = async (
+    query: ISearchQuery
+  ): Promise<{
+    items: ISearchIndexItem[];
+    hasMore: boolean;
+    nextCursor?: TCursor;
+  }> => {
+    const keyword = sanitizeString(query.query);
+    if (!keyword) return { items: [], hasMore: false };
+
+    const limit = query.limit || 100;
+    await ensureCacheTable(db);
+
+    // 🧹 Nếu keyword đổi → xoá cache cũ
+    if (currentKeyword && currentKeyword !== keyword) {
+      await db.exec(buildDeleteCacheSQL(keyword));
+    }
+    currentKeyword = keyword;
+
+    if (query.cursor?.rowid) {
+      const cacheSQL = buildSelectCacheSQL(keyword, query.cursor.rowid, limit);
+      console.time("CacheSearchExecutionTime");
+      const cachedRows = (await db.select(cacheSQL)) as any[];
+      console.timeEnd("CacheSearchExecutionTime");
+      if (cachedRows.length > 0) {
+        const hasMore = cachedRows.length > limit;
+        const items = hasMore ? cachedRows.slice(0, limit) : cachedRows;
+        const nextCursor = hasMore
+          ? { rowid: items[items.length - 1].id }
+          : undefined;
+        return { items, hasMore, nextCursor };
+      }
+    }
+
+    // 🔍 Không có cache hoặc lần đầu → chạy truy vấn thật
+    let sql = buildInitPrefixQuery(buildPrefixPhraseSearch(keyword));
+    sql += buildUserFilterClause(query);
+    sql += buildDateFilterClause(query);
+    if (query.cursor?.rowid) sql += buildCursorClause(query.cursor);
+    sql += buildOrderByClause(query.type || ESearchType.FULL_TEXT);
+    sql += buildLimitClause(limit + 1);
+
+    console.time("FullTextSearchExecutionTime");
+    const rawResults = (await db.select(sql)) as any[];
+    console.timeEnd("FullTextSearchExecutionTime");
+
+    const mapped = mapSQLiteRows(rawResults, mapToSearchIndexItem);
+    const hasMore = mapped.length > limit;
+    const items = hasMore ? mapped.slice(0, limit) : mapped;
+    const lastItem = items[items.length - 1];
+    const nextCursor = hasMore ? { rowid: lastItem.rowid } : (undefined as any);
+
+    (async () => {
+      for (const row of items) {
+        await db.exec(buildInsertCacheSQL(row, keyword));
+      }
+      await db.exec(buildTrimCacheSQL(keyword));
+    })();
+
+    return { items, hasMore, nextCursor };
+  };
 
   const performFullTextSearch = async (
     query: ISearchQuery

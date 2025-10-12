@@ -1,8 +1,11 @@
 import { withErrorHandling } from "./core/application/error";
 import { createInMemoryEventBus } from "./core/application/eventbus";
 import {
+  periodicHealthCheckHandler,
+  startupHealthCheckHandler,
+} from "./core/application/handler/health-check.hdl";
+import {
   autoIndexMessageHandler,
-  indexExistingMessages,
   retrySendingPendingMessagesHandler,
   updateLastMsgHandler,
   updateMsgAckHandler,
@@ -22,10 +25,6 @@ import { createUserRepoIdb } from "./infratructure/indexDB/repos/user.repo";
 import { createSocketClient } from "./infratructure/socket";
 import { SQLiteWorkerDB } from "./infratructure/sqlite/init";
 import { createSearchRepoSQLite } from "./infratructure/sqlite/repos";
-import {
-  startupHealthCheckHandler,
-  periodicHealthCheckHandler,
-} from "./core/application/handler/health-check.hdl";
 
 /////////////////////////
 
@@ -59,6 +58,76 @@ const seedUsers: IUserEntity[] = [
     dob: "03/03/1994",
     gender: EUserGender.MALE,
     name: "Charlie Brown",
+  },
+  {
+    id: "4-diana",
+    userName: "Diana",
+    displayName: "Diana",
+    bio: "Lover of art and coffee ☕",
+    createdAt: new Date().getTime(),
+    dob: "04/04/1991",
+    gender: EUserGender.FEMALE,
+    name: "Diana Prince",
+  },
+  {
+    id: "5-ethan",
+    userName: "Ethan",
+    displayName: "Ethan",
+    bio: "Tech enthusiast and gamer 🎮",
+    createdAt: new Date().getTime(),
+    dob: "05/05/1993",
+    gender: EUserGender.MALE,
+    name: "Ethan Miller",
+  },
+  {
+    id: "6-fiona",
+    userName: "Fiona",
+    displayName: "Fiona",
+    bio: "Traveler and foodie 🌍",
+    createdAt: new Date().getTime(),
+    dob: "06/06/1995",
+    gender: EUserGender.FEMALE,
+    name: "Fiona Lee",
+  },
+  {
+    id: "7-george",
+    userName: "George",
+    displayName: "George",
+    bio: "Always learning something new!",
+    createdAt: new Date().getTime(),
+    dob: "07/07/1990",
+    gender: EUserGender.MALE,
+    name: "George Wilson",
+  },
+  {
+    id: "8-hannah",
+    userName: "Hannah",
+    displayName: "Hannah",
+    bio: "Bookworm and tea lover 🍵",
+    createdAt: new Date().getTime(),
+    dob: "08/08/1996",
+    gender: EUserGender.FEMALE,
+    name: "Hannah Davis",
+  },
+  {
+    id: "9-ian",
+    userName: "Ian",
+    displayName: "Ian",
+    bio: "Music producer and sound designer 🎧",
+    createdAt: new Date().getTime(),
+    dob: "09/09/1991",
+    gender: EUserGender.MALE,
+    name: "Ian Carter",
+  },
+  {
+    id: "10-julia",
+    userName: "Julia",
+    displayName: "Julia",
+    bio: "Photographer & dreamer 📸",
+    createdAt: new Date().getTime(),
+    dob: "10/10/1994",
+    gender: EUserGender.FEMALE,
+    name: "Julia Roberts",
   },
 ];
 

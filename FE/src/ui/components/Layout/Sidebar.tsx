@@ -77,7 +77,7 @@ export function Sidebar() {
   if (!currentUser) return null;
 
   return (
-    <div className="w-100 bg-white border-r border-gray-200 flex flex-col">
+    <div className="w-100 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <ContextMenu>
@@ -116,7 +116,7 @@ export function Sidebar() {
       />
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         {isSearchOpen ? (
           <SearchBox
             isOpen={isSearchOpen}

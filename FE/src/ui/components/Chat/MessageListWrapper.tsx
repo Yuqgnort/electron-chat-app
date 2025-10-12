@@ -12,6 +12,7 @@ import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownIcon } from "lucide-react";
 import { Button } from "../core/Button";
 import MessageList from "./MessageList";
+import { useEffect } from "react";
 
 const updateMessageInCache = (
   payload: IMsgEntity,
@@ -108,6 +109,7 @@ export function MessageListWrapper() {
     isFetchingPreviousPage,
     hasPreviousPage,
     fetchPreviousPage,
+    refetch,
   } = useGetMessagesByConvId(
     service,
     chatBoxState.conversationId,
@@ -139,7 +141,7 @@ export function MessageListWrapper() {
   const firstMessageId = messages.length > 0 ? 1 : 0;
   const allMessagesCount = messages.length;
 
-  useSubscribeEventBus(eventBus, "MsgUpdated", (payload) => {
+  useSubscribeEventBus(eventBus, "MsgUpdated", async (payload) => {
     updateMessageInCache(
       payload,
       queryClient,
@@ -149,7 +151,7 @@ export function MessageListWrapper() {
     );
   });
 
-  useSubscribeEventBus(eventBus, "MsgCreated", (payload) => {
+  useSubscribeEventBus(eventBus, "MsgCreated", async (payload) => {
     if (payload.conversationId !== chatBoxState.conversationId) return;
     addNewMessageToLastPageCache(
       payload,
@@ -174,7 +176,14 @@ export function MessageListWrapper() {
     }
   });
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (!chatBoxState.conversationId) return;
+    refetch();
+  }, [chatBoxState.conversationId, refetch]);
+
+  if (!chatBoxState.conversationId || !currentUser) {
+    return null;
+  }
 
   return (
     <div className="relative h-full flex flex-col">

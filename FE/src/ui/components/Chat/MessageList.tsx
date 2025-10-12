@@ -224,11 +224,11 @@ const MessageList = ({
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
           </div>
         )}
-        {!isCanLoadMoreBottom && !isLoadingBottom && messages.length > 0 && (
+        {/* {!isCanLoadMoreBottom && !isLoadingBottom && messages.length > 0 && (
           <div className="text-center text-gray-500 text-sm py-2">
             📌 Latest Message
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );

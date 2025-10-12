@@ -22,9 +22,9 @@ import {
   INFINITE_SEARCH_QUERY_KEY,
 } from "./hooks/useInfiniteSearchMessages";
 
-import { topic3 } from "@/test/messages";
+import { topic1 } from "@/test/messages";
 
-const mock1 = topic3 as string[];
+const mock1 = topic1 as string[];
 
 const mockCreateMessages = async (
   service: any,

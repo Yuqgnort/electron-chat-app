@@ -2,12 +2,19 @@ import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useSimpleTypingListener } from "../../hooks/useSimpleTypingListener";
 
 export function SimpleTypingIndicator() {
-  const { isAnyoneTyping } = useSimpleTypingListener();
+  const { isAnyoneTyping, typingUsers } = useSimpleTypingListener();
+
   const {
     chatBoxState: { receiverUser },
   } = useChatWindowStore();
 
-  if (!isAnyoneTyping) {
+  const currentUserId = receiverUser?.id;
+
+  if (
+    !isAnyoneTyping ||
+    typingUsers.length === 0 ||
+    (receiverUser && typingUsers[0] !== currentUserId)
+  ) {
     return null;
   }
 

@@ -4,7 +4,7 @@ import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
 import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
 import { useGetUserById } from "@/ui/hooks/tanstack/user";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, RefreshCcw, Trash } from "lucide-react";
+import { LogOut, RefreshCcw, Squirrel, Trash } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Button } from "../core/Button";
 import {
@@ -87,13 +87,27 @@ export function Sidebar() {
           <ContextMenuContent className="w-52">
             <ContextMenuItem
               inset
-              onSelect={() =>
-                service.resetChatDataKeepUsers(() => window.location.reload())
+              onSelect={async () =>
+                await service.resetChatDataKeepUsers(() =>
+                  window.location.reload()
+                )
               }
             >
               Reset App
               <ContextMenuShortcut>
                 <Trash />
+              </ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem
+              inset
+              onSelect={async () => {
+                await service.search.optimizeIndex();
+                alert("Optimize index done!");
+              }}
+            >
+              Optimize Index DB
+              <ContextMenuShortcut>
+                <Squirrel />
               </ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem inset onSelect={() => window.location.reload()}>

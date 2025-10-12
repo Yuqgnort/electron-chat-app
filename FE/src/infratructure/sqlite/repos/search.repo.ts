@@ -352,7 +352,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
         switch (query.type) {
           case ESearchType.FULL_TEXT:
-            searchResult = await performFullTextSearch(query);
+            searchResult = await performFullTextSearchCache(query);
             break;
           case ESearchType.EXACT_PHRASE:
             searchResult = await performExactPhraseSearch(query);
@@ -474,15 +474,25 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
       // Group messages by conversation for efficient metadata updates
       const conversationUpdates = new Map<string, number>();
 
-      for (const message of messages) {
-        // Index each message
-        const insertMessageSQL = `
-          INSERT INTO fts_index_global(messageId, content, senderId, conversationId, createdAt, receiverId) 
-          VALUES ('${message.messageId}', '${sanitizeString(message.content)}', '${sanitizeString(message.senderId)}', '${message.conversationId}', '${message.createdAt.toString()}', '${message.receiverId}')
-        `;
-        await db.exec(insertMessageSQL);
+      // Build all insert statements
+      const insertStatements: string[] = [];
 
-        // Track the latest timestamp for each conversation
+      for (const message of messages) {
+        const insertSQL = `
+      INSERT INTO fts_index_global (messageId, content, senderId, conversationId, createdAt, receiverId)
+      VALUES (
+        '${message.messageId}',
+        '${sanitizeString(message.content)}',
+        '${sanitizeString(message.senderId)}',
+        '${message.conversationId}',
+        '${message.createdAt.toString()}',
+        '${message.receiverId}'
+      );
+    `;
+
+        insertStatements.push(insertSQL);
+
+        // Track latest timestamp for each conversation
         const currentTimestamp =
           conversationUpdates.get(message.conversationId) || 0;
         if (message.createdAt > currentTimestamp) {
@@ -490,10 +500,23 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         }
       }
 
-      // Update conversation metadata for all affected conversations
+      // Execute all inserts in a single bulk transaction
+      const bulkSQL = `
+    BEGIN TRANSACTION;
+    ${insertStatements.join("\n")}
+    COMMIT;
+  `;
+
+      console.log(`Bulk inserting index ${messages.length} messages...`);
+      await db.exec(bulkSQL);
+      console.log("Bulk insert index completed.");
+
+      // Update conversation metadata after all inserts
       for (const [conversationId, latestTimestamp] of conversationUpdates) {
         await this.updateConversationMetadata(conversationId, latestTimestamp);
       }
+
+      console.log("Bulk index completed.");
     },
 
     async rebuildIndex(): Promise<void> {

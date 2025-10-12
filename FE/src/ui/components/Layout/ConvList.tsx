@@ -11,7 +11,7 @@ import { ConvItem } from "./ConvItem";
 import { SidebarTab } from "./Sidebar";
 
 export function ConvList({ activeTab }: { activeTab: SidebarTab }) {
-  const { service, eventBus, socket } = useAppContext();
+  const { service, eventBus } = useAppContext();
   const { currentUser } = useCurrentUserStore();
   const { setChatBoxState, chatBoxState } = useChatWindowStore();
   const [isHaveNewMessage, setIsHaveNewMessage] = useState(false);

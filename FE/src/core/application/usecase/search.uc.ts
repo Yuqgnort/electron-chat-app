@@ -1,8 +1,8 @@
 import {
   ESearchType,
   IMessageIndexData,
-  ISearchQuery,
   ISearchIndexResult,
+  ISearchQuery,
   createSearchQuery,
   isValidSearchQuery,
 } from "@/core/domain/search/entity";
@@ -90,4 +90,14 @@ export const getUserMessageCount = withErrorHandling(
     return searchRepo.getUserMessageCount(userId);
   },
   "getUserMessageCount"
+);
+
+export const optimizeIndex = withErrorHandling(
+  async (searchRepo: ISearchRepository): Promise<void> => {
+    console.log("Optimizing search index...");
+    assertExists(searchRepo, "searchRepo is required");
+    await searchRepo.optimizeIndex();
+    console.log("Search index optimized.");
+  },
+  "optimizeIndex"
 );

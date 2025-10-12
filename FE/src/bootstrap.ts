@@ -14,6 +14,7 @@ import {
 } from "./core/application/handler/msg.hdl";
 import { createAppService } from "./core/application/services-facade";
 import { ISearchRepository } from "./core/domain/search/repo";
+import { TTimeStamp } from "./core/domain/type";
 import { EUserGender, IUserEntity } from "./core/domain/user/entity";
 import { createIndexedDBTransactionManager } from "./infratructure/indexDB/helper";
 import { ChatDb, initDb } from "./infratructure/indexDB/init";
@@ -25,6 +26,7 @@ import { createUserRepoIdb } from "./infratructure/indexDB/repos/user.repo";
 import { createSocketClient } from "./infratructure/socket";
 import { SQLiteWorkerDB } from "./infratructure/sqlite/init";
 import { createSearchRepoSQLite } from "./infratructure/sqlite/repos";
+import { insertCustomTestMessages } from "./test/messages/bulk-insert-messages";
 
 /////////////////////////
 
@@ -242,6 +244,30 @@ export async function bootstrap() {
     healthCheck: {
       start: () => periodicHealthCheck.start(),
       stop: () => periodicHealthCheck.stop(),
+    },
+    test: {
+      insertCustomTestMessages: withErrorHandling(
+        async (
+          conversationId: string,
+          senderId: string,
+          receiverId: string,
+          count: number,
+          startIndex: number = 0,
+          startDate?: TTimeStamp
+        ) =>
+          await insertCustomTestMessages(
+            db,
+            searchRepo,
+            convRepo,
+            conversationId,
+            senderId,
+            receiverId,
+            count,
+            startIndex,
+            startDate
+          ),
+        "insertCustomTestMessages"
+      ),
     },
   };
 }

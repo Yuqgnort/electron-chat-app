@@ -32,6 +32,7 @@ import { getConvByUserIds } from "./usecase/conv.uc";
 import { getAllMsgs, getMsgsByConvId } from "./usecase/msg.uc";
 import { getAllPendingMsgs } from "./usecase/pending-msg.uc";
 import { getAllUsers, getUserById } from "./usecase/user.uc";
+import { optimizeIndex } from "./usecase/search.uc";
 
 type ExtractPayload<
   T extends { type: string },
@@ -215,6 +216,9 @@ export function createAppService(
           ),
         "searchExactPhrase"
       ),
+      optimizeIndex: withErrorHandling(async () => {
+        await optimizeIndex(repos.searchRepo);
+      }, "optimizeIndex"),
     },
     healthCheck: {
       performHealthCheck: withErrorHandling(

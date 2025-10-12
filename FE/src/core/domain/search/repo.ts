@@ -1,21 +1,10 @@
 import { TID } from "../type";
-import {
-  IMessageIndexData,
-  ISearchIndexResult,
-  ISearchQuery,
-  TRankingColection,
-} from "./entity";
+import { IMessageIndexData, ISearchIndexResult, ISearchQuery } from "./entity";
 
 export interface ISearchRepository {
   init(): Promise<void>;
-  search(
-    query: ISearchQuery,
-    rank: TRankingColection
-  ): Promise<ISearchIndexResult>;
-  searchExactPhrase(
-    query: ISearchQuery,
-    rank: TRankingColection
-  ): Promise<ISearchIndexResult>;
+  search(query: ISearchQuery): Promise<ISearchIndexResult>;
+  searchExactPhrase(query: ISearchQuery): Promise<ISearchIndexResult>;
 
   // Index operations
   indexMessage(messageData: IMessageIndexData): Promise<void>;

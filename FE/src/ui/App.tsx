@@ -22,37 +22,11 @@ import {
   INFINITE_SEARCH_QUERY_KEY,
 } from "./hooks/useInfiniteSearchMessages";
 
-import { topic1 } from "@/test/messages";
-
-const mock1 = topic1 as string[];
-
-const mockCreateMessages = async (
-  service: any,
-  convId: string,
-  userIds: string[]
-) => {
-  for (let i = 0; i < mock1.length; i++) {
-    try {
-      await service.msg.sendMessage({
-        content: `Message ${i + 1}: ${mock1[i]}`,
-        conversationId: convId,
-        senderId: userIds[0],
-        receiverId: userIds[1],
-        serverId: null,
-        status: EMsgStatus.PENDING,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    } catch (error) {
-      console.error(`Failed to send message ${i + 1}:`, error);
-    }
-  }
-};
-
 ////////////////////
 
 export function App() {
   const queryClient = useQueryClient();
-  const { service, socket } = useAppContext();
+  const { service, socket, test } = useAppContext();
 
   const { currentUser, setCurrentUser } = useCurrentUserStore();
   const { chatBoxState, setChatBoxState } = useChatWindowStore();
@@ -92,10 +66,12 @@ export function App() {
       return;
     try {
       const conversationId = await ensureConversationId();
-      // await mockCreateMessages(service, conversationId, [
-      //   currentUser.id,
-      //   chatBoxState.receiverUser.id,
-      // ]);
+
+      const oneMounthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const twoMounthAgo = Date.now() - 60 * 24 * 60 * 60 * 1000;
+      const threeMounthAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      // Simulate many messages for testing search performance
+      // You can comment this out if not needed
 
       await service.msg.sendMessage({
         content,
@@ -105,6 +81,14 @@ export function App() {
         serverId: null,
         status: EMsgStatus.PENDING,
       });
+      // await test.insertCustomTestMessages(
+      //   conversationId,
+      //   currentUser.id,
+      //   chatBoxState.receiverUser.id,
+      //   20000,
+      //   100000
+      //   // threeMounthAgo
+      // );
       await queryClient.invalidateQueries({
         queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser.id],
       });
@@ -160,7 +144,6 @@ export function App() {
           receiverUser={chatBoxState?.receiverUser}
         />
       </MainLayout>
-      {/* <RankingTestPanel /> */}
     </>
   );
 }

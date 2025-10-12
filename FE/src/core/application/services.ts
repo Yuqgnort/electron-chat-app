@@ -243,18 +243,23 @@ export const prefixSearchAndGetRawData = async (
   query: ISearchQuery
 ) => {
   const startTime = Date.now();
-
+  const timeLogs: { step: string; duration: number }[] = [];
   try {
+    const t1 = Date.now();
     const indexResults = await prefixSearch(searchRepo, query);
-
+    timeLogs.push({ step: "prefixSearch", duration: Date.now() - t1 });
+    const t2 = Date.now();
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
       indexResults.items,
       transactionManager
     );
-
-    return createSearchRawResult(
+    timeLogs.push({
+      step: "enrichSearchResultsWithRawData",
+      duration: Date.now() - t2,
+    });
+    const result = createSearchRawResult(
       enrichedItems,
       query.query,
       query.type,
@@ -262,15 +267,16 @@ export const prefixSearchAndGetRawData = async (
       Date.now() - startTime,
       indexResults.nextCursor
     );
+    const totalTime = Date.now() - startTime;
+    timeLogs.push({ step: "Total", duration: totalTime });
+    console.table(timeLogs);
+    return result;
   } catch (error) {
     console.error("Enhanced search error:", error);
-    return createSearchRawResult(
-      [],
-      query.query,
-      query.type,
-      false,
-      Date.now() - startTime
-    );
+    const totalTime = Date.now() - startTime;
+    timeLogs.push({ step: "Total (failed)", duration: totalTime });
+    console.table(timeLogs);
+    return createSearchRawResult([], query.query, query.type, false, totalTime);
   }
 };
 
@@ -282,15 +288,23 @@ export const exactPhraseSearchAndGetRawData = async (
   query: ISearchQuery
 ) => {
   const startTime = Date.now();
+  const timeLogs: { step: string; duration: number }[] = [];
   try {
+    const t1 = Date.now();
     const indexResults = await searchExactPhrase(searchRepo, query);
+    timeLogs.push({ step: "searchExactPhrase", duration: Date.now() - t1 });
+    const t2 = Date.now();
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
       indexResults.items,
       transactionManager
     );
-    return createSearchRawResult(
+    timeLogs.push({
+      step: "enrichSearchResultsWithRawData",
+      duration: Date.now() - t2,
+    });
+    const result = createSearchRawResult(
       enrichedItems,
       query.query,
       query.type,
@@ -298,15 +312,16 @@ export const exactPhraseSearchAndGetRawData = async (
       Date.now() - startTime,
       indexResults.nextCursor
     );
+    const totalTime = Date.now() - startTime;
+    timeLogs.push({ step: "Total", duration: totalTime });
+    console.table(timeLogs);
+    return result;
   } catch (error) {
-    console.error("Enhanced search error:", error);
-    return createSearchRawResult(
-      [],
-      query.query,
-      query.type,
-      false,
-      Date.now() - startTime
-    );
+    console.error("Enhanced search error (exactPhrase):", error);
+    const totalTime = Date.now() - startTime;
+    timeLogs.push({ step: "Total (failed)", duration: totalTime });
+    console.table(timeLogs);
+    return createSearchRawResult([], query.query, query.type, false, totalTime);
   }
 };
 
@@ -343,14 +358,30 @@ export const enrichSearchResultsWithRawData = async (
   searchItems: ISearchIndexItem[],
   transactionManager: ITransactionManager
 ): Promise<ISearchRawResultItem[]> => {
-  try {
-    const results = await Promise.all(
-      searchItems.map((item) =>
-        getSearchRawResult(userRepo, msgRepo, item, transactionManager)
-      )
-    );
-    return results.filter((r) => r !== null);
-  } catch (error) {
-    return [];
-  }
+  const messageIds = searchItems.map((i) => i.messageId);
+  return await transactionManager.executeInTransaction(
+    ["users", "messages"],
+    async () => {
+      const messages = await msgRepo.getManyByIds(messageIds);
+      if (!messages?.length) return [];
+      const userIds = new Set<string>();
+      messages.forEach((msg) => {
+        userIds.add(msg.senderId);
+        userIds.add(msg.receiverId);
+      });
+      const users = await userRepo.getManyByIds([...userIds]);
+      if (!users?.length) return [];
+      const userMap = new Map(users.map((u) => [u.id, u]));
+      return messages.map((msg) =>
+        createSearchRawItem({
+          msg,
+          receiverId: msg.receiverId,
+          receiverName: userMap.get(msg.receiverId)?.name ?? "unknown",
+          senderId: msg.senderId,
+          senderName: userMap.get(msg.senderId)?.name ?? "unknown",
+          highlight: "",
+        })
+      );
+    }
+  );
 };

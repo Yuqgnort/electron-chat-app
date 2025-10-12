@@ -150,11 +150,11 @@ const buildCursorClause = (cursor?: { rowid: number }): string => {
 const buildOrderByClause = (type: ESearchType): string => {
   switch (type) {
     case ESearchType.FULL_TEXT:
-      return `ORDER BY rowid DESC`;
+      return ` ORDER BY rowid DESC`;
     case ESearchType.EXACT_PHRASE:
-      return `ORDER BY rowid DESC`;
+      return ` ORDER BY rowid DESC`;
     default:
-      return `ORDER BY rowid DESC`;
+      return ` ORDER BY rowid DESC`;
   }
 };
 
@@ -211,9 +211,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     sql += buildOrderByClause(query.type || ESearchType.FULL_TEXT);
     sql += buildLimitClause(limit + 1);
 
-    console.time("FullTextSearchExecutionTime");
     const rawResults = (await db.select(sql)) as any[];
-    console.timeEnd("FullTextSearchExecutionTime");
 
     const mapped = mapSQLiteRows(rawResults, mapToSearchIndexItem);
     const hasMore = mapped.length > limit;
@@ -254,23 +252,18 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     }
     sql += buildOrderByClause(query.type || ESearchType.FULL_TEXT);
     sql += buildLimitClause(limit + 1);
-
-    console.log("Final SQL for full-text search:", sql);
-    console.time("FullTextSearchExecutionTime");
     const rawResults = await db.select(sql);
-    console.timeEnd("FullTextSearchExecutionTime");
-
     const mappedResults = mapSQLiteRows(
       rawResults as any[],
       mapToSearchIndexItem
     );
-
     const hasMore = mappedResults.length > limit;
     const items = hasMore ? mappedResults.slice(0, limit) : mappedResults;
     const lastItem = items[items.length - 1];
     const nextCursor = hasMore
       ? { rowid: lastItem.rowid as number }
       : undefined;
+    console.log("Final SQL for full-text search:", sql);
     return { items, hasMore, nextCursor };
   };
 
@@ -298,10 +291,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     sql += buildOrderByClause(query.type || ESearchType.FULL_TEXT);
     sql += buildLimitClause(limit + 1);
 
-    console.log("Final SQL for full-text search:", sql);
-    console.time("FullTextSearchExecutionTime");
     const rawResults = await db.select(sql);
-    console.timeEnd("FullTextSearchExecutionTime");
 
     const mappedResults = mapSQLiteRows(
       rawResults as any[],
@@ -314,6 +304,8 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     const nextCursor = hasMore
       ? { rowid: lastItem.rowid as number }
       : undefined;
+    console.log("Final SQL for full-text search:", sql);
+
     return { items, hasMore, nextCursor };
   };
 
@@ -352,7 +344,7 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
 
         switch (query.type) {
           case ESearchType.FULL_TEXT:
-            searchResult = await performFullTextSearchCache(query);
+            searchResult = await performFullTextSearch(query);
             break;
           case ESearchType.EXACT_PHRASE:
             searchResult = await performExactPhraseSearch(query);

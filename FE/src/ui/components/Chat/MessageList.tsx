@@ -145,33 +145,6 @@ const MessageList = ({
     lastScrollTop.current = scrollTop;
   };
 
-  if (!messages || messages.length === 0) {
-    return (
-      <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-gray-100">
-        <div
-          ref={chatContainerRef}
-          className="flex-1 flex-col gap-4 overflow-y-auto p-4 flex items-center justify-center"
-        >
-          <div className="flex flex-col items-center gap-4 max-w-md text-center">
-            <MessageCircleMore
-              width={48}
-              height={48}
-              className="text-gray-400"
-            />
-            <div className="space-y-2">
-              <h3 className="text-xl font-semibold text-gray-800">
-                No messages yet
-              </h3>
-              <p className="text-gray-500 text-sm leading-relaxed">
-                Start the conversation and see your messages appear here
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full bg-gray-100">
       <div
@@ -224,11 +197,6 @@ const MessageList = ({
             <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
           </div>
         )}
-        {/* {!isCanLoadMoreBottom && !isLoadingBottom && messages.length > 0 && (
-          <div className="text-center text-gray-500 text-sm py-2">
-            📌 Latest Message
-          </div>
-        )} */}
       </div>
     </div>
   );

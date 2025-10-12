@@ -15,4 +15,5 @@ export interface IMsgRepo {
   ): Promise<TPaginationResult<IMsgEntity, TTimeStamp> | null>;
   getAll(): Promise<IMsgEntity[] | null>;
   countAll(): Promise<number | null>;
+  getManyByIds(ids: TID[]): Promise<IMsgEntity[] | null>;
 }

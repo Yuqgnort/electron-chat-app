@@ -19,5 +19,11 @@ export const createUserRepoIdb = (db: ChatDb): IUserRepo => {
         (await db.users.where("username").equals(username).first()) || null
       );
     },
+    async getManyByIds(ids) {
+      const rs = await db.users.bulkGet(ids);
+      return (
+        rs.filter((u): u is NonNullable<typeof u> => u !== undefined) || null
+      );
+    },
   };
 };

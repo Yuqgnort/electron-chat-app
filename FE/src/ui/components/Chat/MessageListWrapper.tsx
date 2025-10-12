@@ -9,10 +9,10 @@ import {
 } from "@/ui/hooks/tanstack/msg";
 import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownIcon } from "lucide-react";
+import { ArrowDownIcon, Loader, MessageCircleMore } from "lucide-react";
+import { useEffect } from "react";
 import { Button } from "../core/Button";
 import MessageList from "./MessageList";
-import { useEffect } from "react";
 
 const updateMessageInCache = (
   payload: IMsgEntity,
@@ -95,6 +95,26 @@ const addNewMessageToLastPageCache = (
   );
 };
 
+const EmptyState = () => {
+  return (
+    <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="flex-1 flex-col gap-4 overflow-y-auto p-4 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 max-w-md text-center">
+          <MessageCircleMore width={48} height={48} className="text-gray-400" />
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold text-gray-800">
+              No messages yet
+            </h3>
+            <p className="text-gray-500 text-sm leading-relaxed">
+              Start the conversation and see your messages appear here
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export function MessageListWrapper() {
   const queryClient = useQueryClient();
   const { service, eventBus } = useAppContext();
@@ -110,6 +130,7 @@ export function MessageListWrapper() {
     hasPreviousPage,
     fetchPreviousPage,
     refetch,
+    isLoading,
   } = useGetMessagesByConvId(
     service,
     chatBoxState.conversationId,
@@ -182,11 +203,21 @@ export function MessageListWrapper() {
   }, [chatBoxState.conversationId, refetch]);
 
   if (!chatBoxState.conversationId || !currentUser) {
-    return null;
+    return <EmptyState />;
+  }
+
+  if ((!messages || messages.length === 0) && !isLoading) {
+    return <EmptyState />;
   }
 
   return (
     <div className="relative h-full flex flex-col">
+      {isLoading && (
+        <div className="p-4 text-center absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+          <Loader className="animate-spin text-gray-500" />
+        </div>
+      )}
+
       <MessageList
         direction={chatBoxState.cursor ? "around" : "latest"}
         messages={messages}

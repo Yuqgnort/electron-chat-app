@@ -178,5 +178,9 @@ export function createMsgRepoIdb(db: ChatDb): IMsgRepo {
     async countAll() {
       return db.messages.count();
     },
+    async getManyByIds(ids) {
+      const rs = await db.messages.bulkGet(ids);
+      return rs.filter((r): r is IMsgEntity => r !== undefined) || null;
+    },
   };
 }

@@ -22,6 +22,14 @@ export function ConvList({ activeTab }: { activeTab: SidebarTab }) {
     activeTab === SidebarTab.CONVERSATIONS
   );
 
+  const conversationsSorted = conversations
+    ? [...conversations].sort((a, b) => {
+        const aTime = a.lastMessage ? a.lastMessage.createdAt : 0;
+        const bTime = b.lastMessage ? b.lastMessage.createdAt : 0;
+        return bTime - aTime;
+      })
+    : [];
+
   const onSelectConversation = (
     conversation: IConvEntity,
     otherParticipants: IUserEntity[]
@@ -68,7 +76,7 @@ export function ConvList({ activeTab }: { activeTab: SidebarTab }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto">
-        {conversations.map((conv) => {
+        {conversationsSorted.map((conv) => {
           const otherUser = conv.otherParticipants[0];
           if (!otherUser) return null;
           return (

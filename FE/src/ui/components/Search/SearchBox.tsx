@@ -16,7 +16,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Filter, Loader, MessageSquare, Search, X } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../core/Button";
 import { Input } from "../core/Input";
 import FilterPanel from "./FilterPanel";
@@ -43,7 +43,7 @@ const formatDate = (date: string | number) => {
   return formatDistanceToNow(parsed, { addSuffix: true });
 };
 
-const SearchItem = memo(function SearchItem({
+const SearchItem = function SearchItem({
   msg,
   handleClickMessage,
   searchParams,
@@ -86,13 +86,38 @@ const SearchItem = memo(function SearchItem({
       </div>
     </div>
   );
+};
+
+const SearchList = memo(function SearchList({
+  activeResults,
+  handleClickMessage,
+  debouncedSearchParams,
+  currentUser,
+}: {
+  activeResults: ISearchRawResultItem[];
+  handleClickMessage: (result: ISearchRawResultItem, temp: string) => void;
+  debouncedSearchParams: ISearchQuery;
+  currentUser: { id: string };
+}) {
+  return (
+    <>
+      {activeResults.map((msg) => (
+        <SearchItem
+          key={msg.id}
+          msg={msg}
+          handleClickMessage={handleClickMessage}
+          searchParams={debouncedSearchParams}
+          currentUser={currentUser}
+        />
+      ))}
+    </>
+  );
 });
 
 export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const { service } = useAppContext();
   const { currentUser } = useCurrentUserStore();
-  const queryClient = useQueryClient();
 
   const [searchParams, setSearchParams] = useState<ISearchQuery>({
     currentUserId: currentUser?.id || "",
@@ -175,9 +200,12 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
     lastScrollTop.current = scrollTop;
   };
 
-  const handleClickMessage = (result: ISearchRawResultItem, tempt: string) => {
-    onMessageClick?.(result, tempt);
-  };
+  const handleClickMessage = useCallback(
+    (result: ISearchRawResultItem, tempt: string) => {
+      onMessageClick?.(result, tempt);
+    },
+    [onMessageClick]
+  );
 
   useEffect(() => {
     if (isOpen) inputRef.current?.focus();
@@ -281,16 +309,14 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
               style={{ maxHeight: "calc(100% - 60px)" }}
             >
               <div className="divide-y">
-                {activeResults.map((msg) => (
-                  <SearchItem
-                    key={crypto.randomUUID()}
-                    msg={msg}
+                {
+                  <SearchList
+                    activeResults={activeResults}
                     handleClickMessage={handleClickMessage}
-                    searchParams={searchParams}
+                    debouncedSearchParams={debouncedSearchParams}
                     currentUser={currentUser}
                   />
-                ))}
-
+                }
                 {isFetchingNextPage && (
                   <div className="p-4 text-center">
                     <div className="flex items-center justify-center gap-2">
@@ -301,7 +327,6 @@ export function SearchBox({ isOpen, onClose, onMessageClick }: SearchBoxProps) {
                     </div>
                   </div>
                 )}
-
                 {!hasNextPage && activeResults.length > 0 && (
                   <div className="p-4 text-center">
                     <span className="text-xs text-muted-foreground">

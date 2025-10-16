@@ -26,7 +26,7 @@ export function useInfiniteSearchQuery({
 
   const isEnabled =
     enabled &&
-    !!query.query.trim() &&
+    !!query.query &&
     !!query.currentUserId &&
     !!query.limit &&
     query.type === ESearchType.FULL_TEXT;
@@ -72,7 +72,7 @@ export function useInfiniteSearchExactPhraseQuery({
 
   const isEnabled =
     enabled &&
-    !!query.query.trim() &&
+    !!query.query &&
     !!query.currentUserId &&
     !!query.limit &&
     query.type === ESearchType.EXACT_PHRASE;

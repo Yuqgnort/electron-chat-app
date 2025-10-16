@@ -83,9 +83,11 @@ export interface IMessageIndexData {
 export const createNormalizeSearchString = (str: string): string => {
   return str
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[\u0300-\u036f]/g, "") // bỏ dấu tiếng Việt
+    .replace(/đ/g, "d") // thay đ -> d
+    .replace(/Đ/g, "d") // thay Đ -> d
+    .replace(/[^\w\s]/g, " ") // bỏ ký tự đặc biệt
+    .replace(/\s+/g, " ") // gom khoảng trắng
     .trim()
     .toLowerCase();
 };
@@ -214,14 +216,14 @@ export const createRankingColection = (
 ): TRankingColection => {
   const defaultRecencyCalFunction = (createdAt: TTimeStamp) => {
     const ageInHours = (Date.now() - createdAt) / (1000 * 60 * 60);
-    return Math.max(0, 1 - ageInHours / 168);
+    return Math.exp(-ageInHours / 168);
   };
 
   const defaultConversationActivityCalFunction = (
     lastMessagesUpdateAt: TTimeStamp
   ) => {
     const ageInHours = (Date.now() - lastMessagesUpdateAt) / (1000 * 60 * 60);
-    return Math.max(0, 1 - ageInHours / 168);
+    return Math.exp(-ageInHours / 168);
   };
 
   return {

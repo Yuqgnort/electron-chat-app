@@ -185,8 +185,8 @@ export async function bootstrap() {
   await startupHealthCheckHandler(msgRepo, searchRepo);
 
   // Handler 2: Periodic Health Check & Rebuild (every 30 minutes)
-  const periodicHealthCheck = periodicHealthCheckHandler(msgRepo, searchRepo);
-  periodicHealthCheck.start();
+  // const periodicHealthCheck = periodicHealthCheckHandler(msgRepo, searchRepo);
+  // periodicHealthCheck.start();
 
   const service = createAppService(
     {
@@ -202,23 +202,23 @@ export async function bootstrap() {
     socket
   );
 
-  const cleanup = () => {
-    console.log("🧹 Cleaning up periodic health check...");
-    periodicHealthCheck.stop();
-  };
+  // const cleanup = () => {
+  //   console.log("🧹 Cleaning up periodic health check...");
+  //   periodicHealthCheck.stop();
+  // };
 
   // Register cleanup handlers (only in Node.js environment)
-  if (typeof process !== "undefined" && process.on) {
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
-    process.on("beforeExit", cleanup);
-  }
+  // if (typeof process !== "undefined" && process.on) {
+  //   process.on("SIGINT", cleanup);
+  //   process.on("SIGTERM", cleanup);
+  //   process.on("beforeExit", cleanup);
+  // }
 
-  // For browser/renderer environment - cleanup on window unload
-  if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", cleanup);
-    window.addEventListener("unload", cleanup);
-  }
+  // // For browser/renderer environment - cleanup on window unload
+  // if (typeof window !== "undefined") {
+  //   window.addEventListener("beforeunload", cleanup);
+  //   window.addEventListener("unload", cleanup);
+  // }
 
   return {
     service: {
@@ -242,8 +242,12 @@ export async function bootstrap() {
     },
     sqliteDb,
     healthCheck: {
-      start: () => periodicHealthCheck.start(),
-      stop: () => periodicHealthCheck.stop(),
+      start: () => {
+        // periodicHealthCheck.start();
+      },
+      stop: () => {
+        //  periodicHealthCheck.stop(),
+      },
     },
     test: {
       insertCustomTestMessages: withErrorHandling(
@@ -298,8 +302,8 @@ export async function resetChatDataKeepUsers(
         await db.pendingMessages.clear();
       }
     );
-    await searchRepo.clearIndex();
     await sqliteDb.reset();
+    await searchRepo.clearIndex();
     // Reinitialize the search repository to ensure tables are properly created
     await searchRepo.init();
     if (onSuccess) onSuccess();

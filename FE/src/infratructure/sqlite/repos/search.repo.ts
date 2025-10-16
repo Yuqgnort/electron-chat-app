@@ -463,14 +463,27 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
     },
 
     async bulkIndexMessages(messages: IMessageIndexData[]): Promise<void> {
-      // Group messages by conversation for efficient metadata updates
+      const BATCH_SIZE = 10000;
       const conversationUpdates = new Map<string, number>();
 
-      // Build all insert statements
-      const insertStatements: string[] = [];
+      console.log(
+        `Bulk inserting ${messages.length} messages in batches of ${BATCH_SIZE}...`
+      );
 
-      for (const message of messages) {
-        const insertSQL = `
+      // Group updates for conversation metadata
+      for (const msg of messages) {
+        const current = conversationUpdates.get(msg.conversationId) || 0;
+        if (msg.createdAt > current) {
+          conversationUpdates.set(msg.conversationId, msg.createdAt);
+        }
+      }
+
+      // Process inserts in batches
+      for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+        const batch = messages.slice(i, i + BATCH_SIZE);
+
+        const insertStatements = batch.map(
+          (message) => `
       INSERT INTO fts_index_global (messageId, content, senderId, conversationId, createdAt, receiverId)
       VALUES (
         '${message.messageId}',
@@ -480,33 +493,31 @@ export function createSearchRepoSQLite(db: SQLiteWorkerDB): ISearchRepository {
         '${message.createdAt.toString()}',
         '${message.receiverId}'
       );
+    `
+        );
+
+        const batchSQL = `
+      BEGIN TRANSACTION;
+      ${insertStatements.join("\n")}
+      COMMIT;
     `;
 
-        insertStatements.push(insertSQL);
-
-        // Track latest timestamp for each conversation
-        const currentTimestamp =
-          conversationUpdates.get(message.conversationId) || 0;
-        if (message.createdAt > currentTimestamp) {
-          conversationUpdates.set(message.conversationId, message.createdAt);
-        }
+        console.log(
+          `Inserting batch ${i / BATCH_SIZE + 1} (${batch.length} messages)...`
+        );
+        await db.exec(batchSQL);
       }
 
-      // Execute all inserts in a single bulk transaction
-      const bulkSQL = `
-    BEGIN TRANSACTION;
-    ${insertStatements.join("\n")}
-    COMMIT;
-  `;
-
-      console.log(`Bulk inserting index ${messages.length} messages...`);
-      await db.exec(bulkSQL);
-      console.log("Bulk insert index completed.");
+      console.log("All message batches inserted.");
 
       // Update conversation metadata after all inserts
-      for (const [conversationId, latestTimestamp] of conversationUpdates) {
-        await this.updateConversationMetadata(conversationId, latestTimestamp);
-      }
+      console.log("Updating conversation metadata...");
+      await Promise.all(
+        Array.from(conversationUpdates.entries()).map(
+          ([conversationId, latestTimestamp]) =>
+            this.updateConversationMetadata(conversationId, latestTimestamp)
+        )
+      );
 
       console.log("Bulk index completed.");
     },

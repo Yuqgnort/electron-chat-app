@@ -5,6 +5,7 @@ import { createInitMsg, IMsgEntity } from "../domain/msg/entity";
 import { IMsgRepo } from "../domain/msg/repo";
 import { IPendingMsgRepo } from "../domain/pending-msg/repo";
 import {
+  createRankingColection,
   createSearchRawItem,
   createSearchRawResult,
   ISearchIndexItem,
@@ -242,13 +243,21 @@ export const prefixSearchAndGetRawData = async (
   transactionManager: ITransactionManager,
   query: ISearchQuery
 ) => {
-  const startTime = Date.now();
+  const startTime = performance.now();
   const timeLogs: { step: string; duration: number }[] = [];
+
   try {
-    const t1 = Date.now();
+    // 🕐 1️⃣ Prefix search
+    const t1 = performance.now();
+
     const indexResults = await prefixSearch(searchRepo, query);
-    timeLogs.push({ step: "prefixSearch", duration: Date.now() - t1 });
-    const t2 = Date.now();
+    timeLogs.push({
+      step: "prefixSearch",
+      duration: performance.now() - t1,
+    });
+
+    // 🕐 2️⃣ Enrich data
+    const t2 = performance.now();
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
@@ -257,25 +266,75 @@ export const prefixSearchAndGetRawData = async (
     );
     timeLogs.push({
       step: "enrichSearchResultsWithRawData",
-      duration: Date.now() - t2,
+      duration: performance.now() - t2,
     });
+
+    // 🕐 3️⃣ Create ranking collection
+    const { recencyBoost } = createRankingColection();
+
+    // 🕐 4️⃣ Build raw result
     const result = createSearchRawResult(
       enrichedItems,
       query.query,
       query.type,
       indexResults.hasMore,
-      Date.now() - startTime,
+      performance.now() - startTime,
       indexResults.nextCursor
     );
-    const totalTime = Date.now() - startTime;
-    timeLogs.push({ step: "Total", duration: totalTime });
-    console.table(timeLogs);
+
+    // 🕐 5️⃣ Apply ranking
+    const t3 = performance.now();
+    const rankBoostedItems = result.items.map((item) => {
+      const recencyScore = recencyBoost.calFunction
+        ? recencyBoost.calFunction(item.createdAt)
+        : 0;
+      const boostedScore = recencyScore * (recencyBoost.weight || 1);
+      return { ...item, boostedScore };
+    });
+
+    rankBoostedItems.sort(
+      (a, b) => (b.boostedScore || 0) - (a.boostedScore || 0)
+    );
+
+    console.log("Ranking time (ms):", (performance.now() - t3).toFixed(6));
+
+    timeLogs.push({
+      step: "Ranking",
+      duration: performance.now() - t3,
+    });
+
+    // 🕐 6️⃣ Tổng thời gian
+    const totalTime = performance.now() - startTime;
+    timeLogs.push({
+      step: "Total",
+      duration: totalTime,
+    });
+
+    // 🧾 Log đẹp gọn
+    console.table(
+      timeLogs.map((log) => ({
+        Step: log.step,
+        "Duration (ms)": log.duration.toFixed(3),
+      }))
+    );
+
     return result;
   } catch (error) {
     console.error("Enhanced search error:", error);
-    const totalTime = Date.now() - startTime;
-    timeLogs.push({ step: "Total (failed)", duration: totalTime });
-    console.table(timeLogs);
+
+    const totalTime = performance.now() - startTime;
+    timeLogs.push({
+      step: "Total (failed)",
+      duration: totalTime,
+    });
+
+    console.table(
+      timeLogs.map((log) => ({
+        Step: log.step,
+        "Duration (ms)": log.duration.toFixed(3),
+      }))
+    );
+
     return createSearchRawResult([], query.query, query.type, false, totalTime);
   }
 };
@@ -287,13 +346,20 @@ export const exactPhraseSearchAndGetRawData = async (
   transactionManager: ITransactionManager,
   query: ISearchQuery
 ) => {
-  const startTime = Date.now();
+  const startTime = performance.now();
   const timeLogs: { step: string; duration: number }[] = [];
+
   try {
-    const t1 = Date.now();
+    // 🕐 1️⃣ Exact phrase search
+    const t1 = performance.now();
     const indexResults = await searchExactPhrase(searchRepo, query);
-    timeLogs.push({ step: "searchExactPhrase", duration: Date.now() - t1 });
-    const t2 = Date.now();
+    timeLogs.push({
+      step: "searchExactPhrase",
+      duration: performance.now() - t1,
+    });
+
+    // 🕐 2️⃣ Enrich data
+    const t2 = performance.now();
     const enrichedItems = await enrichSearchResultsWithRawData(
       userRepo,
       msgRepo,
@@ -302,25 +368,75 @@ export const exactPhraseSearchAndGetRawData = async (
     );
     timeLogs.push({
       step: "enrichSearchResultsWithRawData",
-      duration: Date.now() - t2,
+      duration: performance.now() - t2,
     });
+
+    // 🕐 3️⃣ Create ranking collection
+    const { recencyBoost } = createRankingColection();
+
+    // 🕐 4️⃣ Build raw result
     const result = createSearchRawResult(
       enrichedItems,
       query.query,
       query.type,
       indexResults.hasMore,
-      Date.now() - startTime,
+      performance.now() - startTime,
       indexResults.nextCursor
     );
-    const totalTime = Date.now() - startTime;
-    timeLogs.push({ step: "Total", duration: totalTime });
-    console.table(timeLogs);
+
+    // 🕐 5️⃣ Apply ranking
+    const t3 = performance.now();
+    const rankBoostedItems = result.items.map((item) => {
+      const recencyScore = recencyBoost.calFunction
+        ? recencyBoost.calFunction(item.createdAt)
+        : 0;
+      const boostedScore = recencyScore * (recencyBoost.weight || 1);
+      return { ...item, boostedScore };
+    });
+
+    rankBoostedItems.sort(
+      (a, b) => (b.boostedScore || 0) - (a.boostedScore || 0)
+    );
+
+    console.log("Ranking time (ms):", (performance.now() - t3).toFixed(6));
+
+    timeLogs.push({
+      step: "Ranking",
+      duration: performance.now() - t3,
+    });
+
+    // 🕐 6️⃣ Tổng thời gian
+    const totalTime = performance.now() - startTime;
+    timeLogs.push({
+      step: "Total",
+      duration: totalTime,
+    });
+
+    // 🧾 Log đẹp gọn
+    console.table(
+      timeLogs.map((log) => ({
+        Step: log.step,
+        "Duration (ms)": log.duration.toFixed(3),
+      }))
+    );
+
     return result;
   } catch (error) {
     console.error("Enhanced search error (exactPhrase):", error);
-    const totalTime = Date.now() - startTime;
-    timeLogs.push({ step: "Total (failed)", duration: totalTime });
-    console.table(timeLogs);
+
+    const totalTime = performance.now() - startTime;
+    timeLogs.push({
+      step: "Total (failed)",
+      duration: totalTime,
+    });
+
+    console.table(
+      timeLogs.map((log) => ({
+        Step: log.step,
+        "Duration (ms)": log.duration.toFixed(3),
+      }))
+    );
+
     return createSearchRawResult([], query.query, query.type, false, totalTime);
   }
 };

@@ -73,22 +73,22 @@ export function App() {
       // Simulate many messages for testing search performance
       // You can comment this out if not needed
 
-      await service.msg.sendMessage({
-        content,
-        conversationId,
-        senderId: currentUser.id,
-        receiverId: chatBoxState.receiverUser.id,
-        serverId: null,
-        status: EMsgStatus.PENDING,
-      });
-      // await test.insertCustomTestMessages(
+      // await service.msg.sendMessage({
+      //   content,
       //   conversationId,
-      //   currentUser.id,
-      //   chatBoxState.receiverUser.id,
-      //   20000,
-      //   100000
-      //   // threeMounthAgo
-      // );
+      //   senderId: currentUser.id,
+      //   receiverId: chatBoxState.receiverUser.id,
+      //   serverId: null,
+      //   status: EMsgStatus.PENDING,
+      // });
+      await test.insertCustomTestMessages(
+        conversationId,
+        currentUser.id,
+        chatBoxState.receiverUser.id,
+        100000,
+        0
+        // threeMounthAgo
+      );
       await queryClient.invalidateQueries({
         queryKey: [GET_CONV_WITH_OTHER_PARTICIPANTS_BY_USER_ID, currentUser.id],
       });

@@ -4,7 +4,7 @@ import { EMsgStatus, IMsgEntity } from "@/core/domain/msg/entity";
 import { createNormalizeSearchString } from "@/core/domain/search/entity";
 import { ISearchRepository } from "@/core/domain/search/repo";
 import { ChatDb } from "@/infratructure/indexDB/init";
-import { topic1, topic2 } from ".";
+import { topic1, topic2, topic3 } from ".";
 import { TTimeStamp } from "@/core/domain/type";
 
 export async function bulkInsertTestMessages(
@@ -33,7 +33,7 @@ export async function bulkInsertTestMessages(
       senderId,
       receiverId,
       conversationId,
-      content: `Message ${i + 1}: ${contentArray[i]}`,
+      content: `Tin nhắn ${i + 1}: ${contentArray[i]}`,
       createdAt: createdAt + i,
       status: EMsgStatus.DELIVERED,
     };
@@ -52,7 +52,9 @@ export async function bulkInsertTestMessages(
       receiverId: msg.receiverId,
       content: createNormalizeSearchString(msg.content),
     }));
+    console.time(`Bulk indexing ${total} messages`);
     await searchRepo.bulkIndexMessages(searchIndexData);
+    console.timeEnd(`Bulk indexing ${total} messages`);
   } catch (err) {
     console.error("Bulk indexing failed:", err);
   }
@@ -69,7 +71,7 @@ export async function bulkInsertTestMessages(
     }
   }
   console.log(`✅ Done inserting ${createdMessages.length} messages`);
-  window.location.reload();
+  // window.location.reload();
   return createdMessages;
 }
 
@@ -84,7 +86,7 @@ export async function insertCustomTestMessages(
   startIndex: number = 0,
   startTime?: TTimeStamp
 ): Promise<IMsgEntity[]> {
-  const allContents = [...(topic1 as string[]), ...(topic2 as string[])];
+  const allContents = [...(topic3 as string[])];
   const selectedContents = allContents.slice(
     startIndex,
     startIndex + messageCount

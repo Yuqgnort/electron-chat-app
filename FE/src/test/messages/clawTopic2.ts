@@ -9,7 +9,7 @@ const START_URL = "https://vnexpress.net/";
 const BASE_DOMAIN = "vnexpress.net";
 const USER_AGENT = "MyCrawler/1.0 (FastMode)";
 const RATE_LIMIT = 0.1; // giây giữa các request (100ms)
-const TARGET_PAIRS = 50000;
+const TARGET_PAIRS = 500000;
 const MIN_LEN = 80;
 const MAX_LEN = 120;
 const CONCURRENCY = 25; // số request song song
@@ -120,11 +120,11 @@ async function crawl() {
 
   console.log(`\n✅ Collected ${texts.length} text snippets.`);
   fs.writeFileSync(
-    "vnexpress_texts_fast2.json",
+    "vnexpress_texts_fast3.json",
     JSON.stringify(texts, null, 2),
     "utf8"
   );
-  console.log("💾 Saved to vnexpress_texts_fast2.json");
+  console.log("💾 Saved to vnexpress_texts_fast3.json");
 }
 
 crawl();

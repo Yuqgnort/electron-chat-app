@@ -1,15 +1,14 @@
-import { IConvEntity } from "../conv/entity";
-import { IUserEntity } from "../user/entity";
+import { TID, TTimeStamp } from "../type";
 
 /////////////////
 
 export interface IConvPartEntity {
-  id: string;
-  joinedAt: Date;
+  id: TID;
+  joinedAt: TTimeStamp;
   isMuted: boolean;
   isHidden: boolean;
-  userId: IUserEntity["id"];
-  conversationId: IConvEntity["id"];
+  userId: TID;
+  conversationId: TID;
 }
 
 //////////////////
@@ -21,6 +20,6 @@ export const createInitConvPart = (
     ...params,
     isMuted: false,
     isHidden: false,
-    joinedAt: new Date(),
+    joinedAt: new Date().getTime(),
   };
 };

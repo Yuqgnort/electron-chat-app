@@ -5,78 +5,59 @@ import {
 } from "@/core/domain/conv/entity";
 import { IConvRepo } from "@/core/domain/conv/repo";
 import { IUserEntity } from "@/core/domain/user/entity";
-import { IEventBus } from "../eventbus";
-import { ITransactionManager } from "../services-facade";
-import { IConvPartRepo } from "@/core/domain/conv-part/repo";
-import { createConvPart } from "./conv-part.uc";
+import { assertExists, withErrorHandling } from "../error";
 
 //////////////////////
 
-export async function getConvById(
-  convRepo: IConvRepo,
-  id: IConvEntity["id"]
-): Promise<IConvEntity | null> {
-  return convRepo.getConvById(id);
-}
+export const getConvById = withErrorHandling(
+  (convRepo: IConvRepo, id: IConvEntity["id"]): Promise<IConvEntity | null> => {
+    return convRepo.getConvById(id);
+  },
+  "getConvById"
+);
 
-export async function getConvsByUserId(
-  convRepo: IConvRepo,
-  userId: IUserEntity["id"]
-): Promise<IConvEntity[]> {
-  return convRepo.getConvsByUserId(userId);
-}
+export const getConvByUserIds = withErrorHandling(
+  (
+    convRepo: IConvRepo,
+    userIds: IUserEntity["id"][]
+  ): Promise<IConvEntity | null> => {
+    return convRepo.getConvByUserIds(userIds);
+  },
+  "getConvByUserIds"
+);
 
-//////////////////////
+///////////////////////
 
-export async function createConv(
-  convRepo: IConvRepo,
-  eventBus: IEventBus,
-  conv?: Parameters<typeof createInitConv>[0]
-): Promise<IConvEntity> {
-  const initNewConv = createInitConv(conv);
-  const newConv = await convRepo.createConv(initNewConv);
-  eventBus.publish({
-    type: "ConvCreated",
-    payload: newConv,
-  });
-  return newConv;
-}
+export const createConv = withErrorHandling(
+  async (
+    convRepo: IConvRepo,
+    conv: Parameters<typeof createInitConv>[0],
+    userIds: IUserEntity["id"][]
+  ) => {
+    const initNewConv = createInitConv({
+      ...conv,
+      key: userIds.sort().join(":"),
+    });
 
-export async function updateConvLastMessageId(
-  convRepo: IConvRepo,
-  eventBus: IEventBus,
-  conv: IConvEntity,
-  msgId: IConvEntity["lastMessageId"]
-): Promise<IConvEntity> {
-  const updated = updateLastMessageId(conv, msgId);
-  await convRepo.updateConv(updated);
-  eventBus.publish({
-    type: "ConvLastMessageChanged",
-    payload: updated,
-  });
-  return updated;
-}
+    const newConv = assertExists(
+      await convRepo.createConv(initNewConv),
+      "Failed to create conversation"
+    );
+    return newConv;
+  },
+  "createConv"
+);
 
-export async function createConvWithParticipants(
-  transactionManager: ITransactionManager,
-  convRepo: IConvRepo,
-  convPartRepo: IConvPartRepo,
-  eventBus: IEventBus,
-  userIds: string[]
-) {
-  return await transactionManager.executeInTransaction(
-    ["conversations", "convParts"],
-    async () => {
-      const newConv = await createConv(convRepo, eventBus);
-      await Promise.all(
-        userIds.map((userId) =>
-          createConvPart(convPartRepo, eventBus, {
-            conversationId: newConv.id,
-            userId,
-          })
-        )
-      );
-      return newConv;
-    }
-  );
-}
+export const updateConvLastMessageId = withErrorHandling(
+  async (
+    convRepo: IConvRepo,
+    conv: IConvEntity,
+    msgId: IConvEntity["lastMessageId"]
+  ) => {
+    if (!conv || !msgId) return null;
+    const updated = updateLastMessageId(conv, msgId);
+    await convRepo.updateConv(updated);
+    return updated;
+  },
+  "updateConvLastMessageId"
+);

@@ -1,61 +1,50 @@
+import { TID, TTimeStamp } from "../type";
+
+export type TMsgDirection = "older" | "newer" | "around" | "latest";
+
 export enum EMsgStatus {
   SENT = "sent",
-  READ = "read",
-  PENDING = "Pending",
+  PENDING = "pending",
   DELIVERED = "delivered",
 }
 
 export interface IMsgEntity {
-  id: string;
+  id: TID;
   localId: string;
-  serverId: string;
+  serverId: string | null;
   senderId: string;
   content: string;
-  createdAt: Date;
+  createdAt: TTimeStamp;
   status: EMsgStatus;
+  receiverId: string;
   conversationId: string;
 }
 
 ///////////////////
 
 export const createInitMsg = (
-  params: Omit<
-    IMsgEntity,
-    "id" | "createdAt" | "status" | "localId" | "serverId"
-  >
-): Omit<IMsgEntity, "id"> => {
+  params: Omit<IMsgEntity, "id" | "createdAt" | "localId"> & {
+    status?: EMsgStatus;
+  }
+) => {
   return {
     ...params,
-    serverId: null,
-    createdAt: new Date(),
-    status: EMsgStatus.PENDING,
     localId: crypto.randomUUID(),
+    createdAt: new Date().getTime(),
+    status: params.status || EMsgStatus.PENDING,
   };
 };
 
 export const markMsgAsSent = (msg: IMsgEntity): IMsgEntity => {
-  if (msg.status !== EMsgStatus.PENDING)
-    throw new Error("Only pending msg can be marked as sent");
   return {
     ...msg,
     status: EMsgStatus.SENT,
   };
 };
 
-export const markMsgAsDelivered = (msg: IMsgEntity): IMsgEntity => {
-  if (msg.status !== EMsgStatus.SENT)
-    throw new Error("Only sent msg can be marked as delivered");
+export const markMsgAsDelivered = (msg: IMsgEntity) => {
   return {
     ...msg,
     status: EMsgStatus.DELIVERED,
-  };
-};
-
-export const markMsgAsRead = (msg: IMsgEntity): IMsgEntity => {
-  if (msg.status !== EMsgStatus.DELIVERED)
-    throw new Error("Only delivered msg can be marked as read");
-  return {
-    ...msg,
-    status: EMsgStatus.READ,
   };
 };

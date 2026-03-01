@@ -26,8 +26,7 @@ export const createIndexedDBTransactionManager = (
       tableNames: TTransactionTable[],
       callback: () => Promise<T>
     ): Promise<T> {
-      const tables = tableNames.map((name) => (db as any)[name]);
-      return db.transaction("rw", tables, callback);
+      return db.transaction("rw", tableNames, callback);
     },
   };
 };

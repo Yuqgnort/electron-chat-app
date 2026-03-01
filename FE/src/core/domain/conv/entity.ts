@@ -1,13 +1,15 @@
 import { IMsgEntity } from "../msg/entity";
+import { TID, TTimeStamp } from "../type";
 
 /////////////////
 
 export interface IConvEntity {
-  id: string;
-  title?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  lastMessageId?: IMsgEntity["id"] | null;
+  id: TID;
+  key?: string | null;
+  title?: string | null;
+  createdAt: TTimeStamp;
+  updatedAt: TTimeStamp;
+  lastMessageId?: TID | null;
 }
 
 //////////////////
@@ -17,8 +19,8 @@ export const createInitConv = (
 ): Omit<IConvEntity, "id"> => {
   return {
     ...params,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date().getTime(),
+    updatedAt: new Date().getTime(),
     lastMessageId: null,
   };
 };
@@ -27,5 +29,5 @@ export const updateLastMessageId = (
   conv: IConvEntity,
   msgId: IMsgEntity["id"]
 ): IConvEntity => {
-  return { ...conv, lastMessageId: msgId, updatedAt: new Date() };
+  return { ...conv, lastMessageId: msgId, updatedAt: new Date().getTime() };
 };

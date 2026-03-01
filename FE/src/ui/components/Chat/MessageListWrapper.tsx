@@ -1,0 +1,248 @@
+import { IMsgEntity } from "@/core/domain/msg/entity";
+import { useAppContext } from "@/ui/context";
+import { useChatWindowStore } from "@/ui/hooks/store/useChatWindow";
+import { useCurrentUserStore } from "@/ui/hooks/store/useCurrentUser";
+import {
+  GET_MESSAGE_BY_CONV_ID_QUERY_KEY,
+  TGetMessagesByConvIdQueryData,
+  useGetMessagesByConvId,
+} from "@/ui/hooks/tanstack/msg";
+import { useSubscribeEventBus } from "@/ui/hooks/useSubscribeEventBus";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownIcon, Loader, MessageCircleMore } from "lucide-react";
+import { useEffect } from "react";
+import { Button } from "../core/Button";
+import MessageList from "./MessageList";
+
+const updateMessageInCache = (
+  payload: IMsgEntity,
+  queryClient: QueryClient,
+  conversationId?: string | null,
+  limit: number = 50,
+  initialCursor: number | null = null
+) => {
+  if (!conversationId) return;
+  queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, initialCursor],
+    (oldData) => {
+      if (!oldData || !oldData.pages) return oldData;
+      const rs = {
+        ...oldData,
+        pages: oldData.pages.map((page) =>
+          page
+            ? {
+                ...page,
+                data: page.data.map((msg) =>
+                  msg.localId === payload.localId
+                    ? { ...msg, status: payload.status }
+                    : msg
+                ),
+              }
+            : page
+        ),
+      };
+      return rs;
+    }
+  );
+};
+
+const addNewMessageToLastPageCache = (
+  payload: IMsgEntity,
+  queryClient: QueryClient,
+  conversationId?: string | null,
+  limit: number = 50,
+  initialCursor: number | null = null
+) => {
+  if (!conversationId) return;
+  queryClient.setQueryData<TGetMessagesByConvIdQueryData>(
+    [GET_MESSAGE_BY_CONV_ID_QUERY_KEY, conversationId, limit, initialCursor],
+    (oldData) => {
+      if (!oldData || !oldData.pages || oldData.pages.length === 0) {
+        return {
+          pages: [
+            {
+              data: [payload],
+              nextCursor: null,
+              prevCursor: null,
+            },
+          ],
+          pageParams: [0],
+        };
+      }
+
+      const lastPageIndex = oldData.pages.length - 1;
+      const lastPage = oldData.pages[lastPageIndex];
+
+      const updatedLastPage = lastPage
+        ? {
+            ...lastPage,
+            data: [...lastPage.data, payload],
+          }
+        : {
+            data: [payload],
+            nextCursor: null,
+            prevCursor: null,
+          };
+
+      const updatedPages = [...oldData.pages];
+      updatedPages[lastPageIndex] = updatedLastPage;
+
+      return {
+        ...oldData,
+        pages: updatedPages,
+      };
+    }
+  );
+};
+
+const EmptyState = () => {
+  return (
+    <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="flex-1 flex-col gap-4 overflow-y-auto p-4 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 max-w-md text-center">
+          <MessageCircleMore width={48} height={48} className="text-gray-400" />
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold text-gray-800">
+              No messages yet
+            </h3>
+            <p className="text-gray-500 text-sm leading-relaxed">
+              Start the conversation and see your messages appear here
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export function MessageListWrapper() {
+  const queryClient = useQueryClient();
+  const { service, eventBus } = useAppContext();
+  const { currentUser } = useCurrentUserStore();
+  const { chatBoxState, setChatBoxState } = useChatWindowStore();
+
+  const {
+    data: messages = [],
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchingPreviousPage,
+    hasPreviousPage,
+    fetchPreviousPage,
+    refetch,
+    isLoading,
+  } = useGetMessagesByConvId(
+    service,
+    chatBoxState.conversationId,
+    40,
+    chatBoxState?.cursor
+  );
+
+  const handleLoadMoreTop = async () => {
+    if (hasNextPage && !isFetchingNextPage) {
+      await fetchNextPage();
+    }
+  };
+
+  const handleLoadMoreBottom = async () => {
+    if (hasPreviousPage && !isFetchingPreviousPage) {
+      await fetchPreviousPage();
+    }
+  };
+
+  const handleJumpToNewest = () => {
+    setChatBoxState({
+      ...chatBoxState,
+      cursor: null,
+      highlightedMessageId: null,
+      highlightedMessageText: null,
+    });
+  };
+
+  const firstMessageId = messages.length > 0 ? 1 : 0;
+  const allMessagesCount = messages.length;
+
+  useSubscribeEventBus(eventBus, "MsgUpdated", async (payload) => {
+    updateMessageInCache(
+      payload,
+      queryClient,
+      chatBoxState.conversationId,
+      40,
+      chatBoxState?.cursor
+    );
+  });
+
+  useSubscribeEventBus(eventBus, "MsgCreated", async (payload) => {
+    if (payload.conversationId !== chatBoxState.conversationId) return;
+    addNewMessageToLastPageCache(
+      payload,
+      queryClient,
+      payload.conversationId,
+      40,
+      chatBoxState?.cursor
+    );
+  });
+
+  useSubscribeEventBus(eventBus, "ConvCreated", async (payload) => {
+    if (!chatBoxState.conversationId && chatBoxState.receiverUser) {
+      const convKey = [currentUser?.id, chatBoxState.receiverUser.id]
+        .sort()
+        .join(":");
+      if (payload.key === convKey) {
+        setChatBoxState({
+          ...chatBoxState,
+          conversationId: payload.id,
+        });
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (!chatBoxState.conversationId) return;
+    refetch();
+  }, [chatBoxState.conversationId, refetch]);
+
+  if (!chatBoxState.conversationId || !currentUser) {
+    return <EmptyState />;
+  }
+
+  if ((!messages || messages.length === 0) && !isLoading) {
+    return <EmptyState />;
+  }
+
+  return (
+    <div className="relative h-full flex flex-col">
+      {isLoading && (
+        <div className="p-4 text-center absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+          <Loader className="animate-spin text-gray-500" />
+        </div>
+      )}
+
+      <MessageList
+        direction={chatBoxState.cursor ? "around" : "latest"}
+        messages={messages}
+        allMessagesCount={allMessagesCount}
+        firstMessageId={firstMessageId}
+        isLoadingTop={isFetchingNextPage}
+        isLoadingBottom={isFetchingPreviousPage}
+        highlightedMessageId={chatBoxState?.highlightedMessageId}
+        highlightedMessageText={chatBoxState?.highlightedMessageText}
+        currentUserId={currentUser.id}
+        isCanLoadMoreBottom={hasPreviousPage}
+        isCanLoadMoreTop={hasNextPage}
+        onLoadMoreTop={handleLoadMoreTop}
+        onLoadMoreBottom={handleLoadMoreBottom}
+      />
+      {chatBoxState.cursor && hasPreviousPage && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute bottom-4 right-4 "
+          onClick={handleJumpToNewest}
+        >
+          <ArrowDownIcon />
+        </Button>
+      )}
+    </div>
+  );
+}

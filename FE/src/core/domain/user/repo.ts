@@ -1,9 +1,9 @@
+import { TID } from "../type";
 import { IUserEntity } from "./entity";
 
 export interface IUserRepo {
-  findAll(): Promise<IUserEntity[]>;
-  findByUserName(
-    userName: IUserEntity["userName"]
-  ): Promise<IUserEntity | null>;
-  findById(id: IUserEntity["id"]): Promise<IUserEntity | null>;
+  getById(id: TID): Promise<IUserEntity | null>;
+  getAll(params?: { ignoreId?: TID[] }): Promise<IUserEntity[] | null>;
+  getByUserName(userName: IUserEntity["userName"]): Promise<IUserEntity | null>;
+  getManyByIds(ids: TID[]): Promise<IUserEntity[] | null>;
 }
